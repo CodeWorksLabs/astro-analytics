@@ -1493,3 +1493,26 @@ verification remains clean at 97/97 tests plus strict typecheck. These docs are
 to be published as a self-contained, provenance-bound snapshot in the public
 docs-site repository; no private product source tarball is to enter that public
 repository.
+
+Publication completed from the docs repository on 2026-09-12. Product commit
+`454893359f8588a71d35d51d1a5e0d16bf355c63` is the documented source
+identity. Docs commit `1052ccaaa967fb79edc5b341092e27720e95eab9` added the
+nine-page `/analytics-for-astro/` section, and `9216442` corrected the existing
+Brand Navigation sync so pinned full commits do not consume GitHub API quota.
+GitHub Actions run `34713005898` passed clean install, production audit,
+Starlight build, and Wrangler dry-run. Cloudflare Workers Builds deployed
+version `b59030fb-e16a-4e17-a9c0-35c8a2efa7c1`; live overview,
+configuration, and legacy-name handoff routes returned 200. The docs were built
+from GitHub rather than locally deployed.
+
+Repository-driven sandbox source is locally committed but deliberately not yet
+pushed: Astro commit `b75544d11a6a42e82bdd0144f2fb7aa3aa954a61` and
+Starlight commit `647a94e03fe862232044e56e93f00d28e8146190`. Both pin
+this product commit and packed SHA-256
+`84B98B37FF5B7D2852BC31E1E9A218A242973FDB313D75E33C513ADABC88B69B`,
+ignore the private tarball in their public repositories, and contain verified
+GitHub Actions workflows for private checkout, hash validation, consumer gates,
+and Wrangler deployment. Phil confirmed credential creation. GitHub then
+required interactive sudo reauthentication, which must be completed by Phil
+before the read-only GitHub App and scoped Cloudflare token can be created and
+the two commits safely pushed.
