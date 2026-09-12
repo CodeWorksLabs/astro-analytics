@@ -59,12 +59,14 @@ dependency audit, and hosting dry-run. A dry-run is not authorization to deploy.
 
 ## Current restrictions
 
-Development product work may be committed and pushed only on `codex/pre-rc`.
-Direct commits or pushes to `main`, merging, tags, GitHub Releases, npm
-publication, and production package integration remain separately controlled.
-Authorized sandbox and documentation-site work follows each owning repository's
-checkpoint. See the product repository checkpoint for the exact candidate and
-review state.
+`main` is the authoritative integrated development branch. Short-lived working
+branches may be used for bounded changes, but they must be merged or otherwise
+integrated deliberately and removed when their work is complete; a permanent
+Codex development branch is not part of the release model. Tags, GitHub Releases,
+npm publication, and production package integration remain separately
+controlled. Authorized sandbox and documentation-site work follows each owning
+repository's checkpoint. See the product repository checkpoint for the exact
+candidate and review state.
 
 Version choice and artifact qualification are separate from release authority.
 See [Versioning and releases](versioning-and-releases.md).

@@ -5,24 +5,25 @@ Updated: 2026-09-12
 ## Current State
 
 The independent product repository is
-`C:\CodeProjects\Products\Astro Analytics` on temporary pre-RC branch
-`codex/pre-rc`, tracking `origin/codex/pre-rc`. Phil authorized a durable remote
-snapshot on 2026-09-12. The complete alpha.7 candidate was committed as
-`6f6e1c0` (`Preserve Analytics for Astro alpha.7 candidate`) and pushed to the
-private GitHub remote. The branch is intended to be merged and deleted when the
-release candidate is accepted. Ongoing commits and pushes are authorized only
-on `codex/pre-rc`. Direct commits or pushes to `main`, merging into `main`,
-tags, package publication, and production-site integration remain unauthorized
-unless Phil explicitly changes that boundary. The previously authorized Astro
-sandbox deployment described below has been completed.
+`C:\CodeProjects\Products\Astro Analytics`. Phil confirmed on 2026-09-12 that
+Astro Analytics is developed in public and that `main` is its authoritative
+integrated branch. The complete alpha.7 implementation originally preserved in
+commit `6f6e1c0` and its subsequent documentation/checkpoint commits have been
+fast-forwarded onto local `main` for the public-repository correction. The
+temporary `codex/pre-rc` policy and private cross-repository build mechanism are
+retired. Short-lived development branches may be used when useful, but they do
+not replace `main` and are removed after integration. Tags, package publication,
+GitHub Releases, and production-site integration remain separately controlled.
 
-The package remains private under the MIT license. The current intended
-Milestone 2 working candidate version is `0.1.0-alpha.7`; it has not been tagged,
-released, or published. Alpha.7 contains the live-qualified Fathom, Plausible,
+The source repository is public under the MIT license. The npm package remains
+unpublished and retains `"private": true` as a publication safeguard until an
+authorized package-release change. The current intended Milestone 2 working
+candidate version is `0.1.0-alpha.7`; it has not been tagged, released, or
+published. Alpha.7 contains the live-qualified Fathom, Plausible,
 and Google Analytics 4 adapters, provider readiness and independent result
 reporting, and the corrected GA4 `arguments`-object queue contract, while
 retaining the reviewed Astro/Starlight support boundary.
-Its canonical private remote remains
+Its canonical public remote is
 `https://github.com/CodeWorksLabs/astro-analytics`.
 The public-facing product title is now **Analytics for Astro**. The npm package
 identifier remains `@codeworkslabs/astro-analytics`; no repository, directory,
@@ -1536,3 +1537,31 @@ platform limitation before creating the Cloudflare token. Until that token is
 stored as `CLOUDFLARE_API_TOKEN` in both sandbox repositories, do not push the
 two prepared sandbox commits because each push would trigger its deploy
 workflow.
+
+## Public repository and temporary credential correction — 2026-09-12
+
+Phil confirmed that Astro Analytics is a coding-in-public product. The earlier
+private pre-RC model was an unsupported task inference, not product policy. The
+historical private-build plan above remains provenance only and is superseded by
+this correction.
+
+The alpha.7 implementation and documentation history were fast-forwarded onto
+local `main`. Current product documentation now identifies `main` as the
+authoritative integrated branch and distinguishes the public source repository
+from the still-unpublished npm package. The temporary `codex/pre-rc` branch is
+to be deleted after the corrected `main` is published.
+
+The two public sandbox repositories contain legitimate local demo work mixed
+with an unnecessary private-repository checkout and direct-deploy workflow.
+Their published `main` branches do not contain that mechanism. The local commits
+must retain their demo implementation while replacing the private checkout with
+an exact public-source checkout and leaving deployment to the existing
+repository-connected Cloudflare build path. They must not require
+`CWL_BUILD_APP_ID`, `CWL_BUILD_APP_PRIVATE_KEY`, or a newly created
+`CLOUDFLARE_API_TOKEN`.
+
+The temporary GitHub App, both active private keys, the four repository secret
+entries, and the recoverable downloaded PEM are obsolete credential residue.
+Their removal is part of the bounded repository correction, not product
+development. No credential value was committed: current-tree, Git-history, and
+GitHub code searches found no PEM filename or private-key material.

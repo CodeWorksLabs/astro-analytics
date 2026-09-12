@@ -1,6 +1,6 @@
 # Analytics for Astro documentation
 
-These documents describe the private `0.1.0-alpha.7` Milestone 2 candidate of
+These documents describe the public-source `0.1.0-alpha.7` Milestone 2 candidate of
 `@codeworkslabs/astro-analytics`.
 
 Milestone 2 provides real Fathom, Plausible, and Google Analytics 4 adapters for
@@ -32,5 +32,6 @@ configuration schema, injected into a page, or exposed by the event client.
 | `@codeworkslabs/astro-analytics/client` | Browser-safe `track()` helper and event types |
 | `@codeworkslabs/astro-analytics/starlight` | Starlight plugin wrapper |
 
-The package is private and unpublished. Installation, release, site integration,
-and deployment remain separate authorized activities.
+The source repository is public. The npm package is currently unpublished and
+retains its publication safeguard. Installation, release, site integration, and
+deployment remain separate authorized activities.
