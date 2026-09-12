@@ -1454,5 +1454,28 @@ dedicated sandboxes and qualified provider-side.
 Enhanced Measurement remains enabled. Its observed automatic `scroll` event is
 separate from the package lifecycle, but browser-history page-change tracking
 should still be disabled before testing Astro client-side navigation to avoid
-duplicate pageviews. No commit, push, publication, tag, release, or
+duplicate pageviews. The alpha.7 candidate and later checkpoint corrections are
+now committed and pushed only on `codex/pre-rc` under the authorization boundary
+in Current State. No package publication, tag, release, merge to `main`, or
 production-site integration occurred.
+
+## Repository-driven sandbox deployment decision — 2026-09-12
+
+Phil accepted the permanent sandbox deployment architecture. Both sandbox
+domains and their existing public repositories will remain after product
+development. Local deployments are to be replaced by repository-authoritative
+builds, consistent with the established CodeWorksLabs site estate.
+
+During the private pre-RC period, each sandbox build will pin an exact Analytics
+for Astro commit from `codex/pre-rc`. GitHub Actions will use a narrowly scoped
+GitHub App to check out the private product repository, pack and install that
+candidate without committing its source tarball to the public sandbox
+repository, run the sandbox verification contract, and deploy with Wrangler.
+Each resulting deployment must therefore be attributable to both an exact
+sandbox commit and an exact product commit.
+
+After package publication, each sandbox will replace the private cross-repo
+checkout with a pinned npm dependency and use the estate's normal GitHub
+verification plus native Cloudflare Workers Builds deployment from sandbox
+`main`. The sandbox repositories, domains, pages, and test purpose remain
+permanent; only the temporary private-package acquisition path is retired.
