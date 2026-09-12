@@ -27,10 +27,11 @@ const result = track("checkout", {
 clients, adapter results, or supported hostile-object cases. It validates and
 copies the event before invoking `window.astroAnalytics.track()`.
 
-Milestone 2 connects the client to Fathom's `trackEvent()` and Plausible's
-`plausible()` APIs. Calls made before an integration's script load is verified
-return `adapter-not-loaded`; they are not queued or retried. Unrelated
-preexisting vendor globals are not treated as package readiness.
+Milestone 2 connects the client to Fathom's `trackEvent()`, Plausible's
+`plausible()`, and Google Analytics 4's `gtag()` APIs. Calls made before an
+integration's script load is verified return `adapter-not-loaded`; they are not
+queued or retried. Unrelated preexisting vendor globals are not treated as
+package readiness.
 
 `configuredProviders()` returns the ordered provider names owned by the current
 runtime. It is intended for diagnostics and operator-facing test surfaces; it
@@ -123,5 +124,12 @@ Plausible receives validated properties as `props`; numeric and boolean values
 are serialized to strings to match its current tracker contract. Its current
 service limit is 30 properties per event, so a larger otherwise-valid property
 bag returns a Plausible `invalid-event` result without calling the vendor API.
+
+Google Analytics 4 receives up to 25 validated event parameters. Caller-supplied
+`send_to` is rejected because the adapter owns routing to its Measurement ID.
+
+Matomo and Umami event mapping is not implemented in alpha.7. No result entry
+for either provider can appear until its provider type and adapter are added in
+a later reviewed candidate.
 
 Do not depend on the brand or property descriptor as a security boundary.

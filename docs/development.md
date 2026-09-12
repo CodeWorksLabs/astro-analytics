@@ -59,9 +59,12 @@ dependency audit, and hosting dry-run. A dry-run is not authorization to deploy.
 
 ## Current restrictions
 
-The current working phase does not authorize commits, pushes, npm publication,
-deployment, or authoritative site integration. See the repository checkpoint for
-the exact candidate and review state.
+Development product work may be committed and pushed only on `codex/pre-rc`.
+Direct commits or pushes to `main`, merging, tags, GitHub Releases, npm
+publication, and production package integration remain separately controlled.
+Authorized sandbox and documentation-site work follows each owning repository's
+checkpoint. See the product repository checkpoint for the exact candidate and
+review state.
 
 Version choice and artifact qualification are separate from release authority.
 See [Versioning and releases](versioning-and-releases.md).

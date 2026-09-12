@@ -7,6 +7,10 @@ and real vendor adapters for Fathom, Plausible, and Google Analytics 4. It has
 no event queue, storage layer, credential store, authentication system, or
 runtime consent-transition API.
 
+Matomo and Umami are planned providers, not dormant alpha.7 adapters. No code
+path recognizes their provider names, creates their globals, loads their
+scripts, or sends data to them.
+
 ## Injection policy
 
 During Astro configuration setup, the integration requests runtime injection

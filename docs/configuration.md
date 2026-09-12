@@ -7,6 +7,11 @@ non-record objects are rejected with `TypeError`.
 Fathom, Plausible, and Google Analytics 4 settings drive implemented Milestone
 2 adapters.
 
+> **Planned providers:** Matomo and Umami are part of the accepted first-stable
+> provider set, but alpha.7 does not accept either provider name or
+> configuration. The notes below describe implementation intent, not usable
+> configuration.
+
 ## Root configuration
 
 | Field | Type | Default | Current behavior |
@@ -177,3 +182,21 @@ analytics({ providers: false });
 ```
 
 This disables injection even if `events: true` or an environment flag is true.
+
+## Planned: Matomo
+
+The planned Matomo adapter will support Matomo Cloud and self-hosted Matomo. Its
+eventual configuration is expected to require a public tracker base URL and a
+Matomo site ID, disable the vendor's eager pageview, and send initial and
+client-navigation pageviews from Astro's post-swap lifecycle. Consent behavior,
+custom-event mapping, URL validation, and exact field names remain subject to
+implementation and review. Do not add a `matomo` provider to alpha.7.
+
+## Planned: Umami
+
+The planned Umami adapter will support Umami Cloud and self-hosted Umami. Its
+eventual configuration is expected to require a public tracker script URL and
+website ID, disable automatic pageviews, and use Astro-owned pageviews plus
+bounded custom events. Consent behavior, custom-event mapping, URL validation,
+and exact field names remain subject to implementation and review. Do not add
+an `umami` provider to alpha.7.

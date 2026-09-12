@@ -8,6 +8,9 @@ no supported public npm installation yet.
 Milestone 2 implements Fathom, Plausible, and Google Analytics 4 pageviews and
 custom events. No queue or runtime consent activation API is included yet.
 
+Matomo and Umami are approved for the first stable provider set but remain
+planned. Alpha.7 does not accept their provider names or load their trackers.
+
 ## Declared requirements
 
 - Node.js 22.18.0 or later

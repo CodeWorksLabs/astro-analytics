@@ -8,6 +8,10 @@ pageviews and bounded custom events. The runtime provides simultaneous-provider
 coordination, exact per-provider outcomes, and provider readiness diagnostics.
 No event queue or runtime consent-transition API is implemented.
 
+Matomo and Umami are approved roadmap providers for the first stable release.
+They are placeholders only in alpha.7: neither provider is accepted by the
+configuration schema, injected into a page, or exposed by the event client.
+
 ## Guides
 
 1. [Getting started](getting-started.md)

@@ -65,6 +65,10 @@ These remain forward-looking adapter-development contracts. Provider
 runtimes are selected internally and are not exported as public
 adapter objects.
 
+There are no Matomo or Umami provider types or runtime exports in alpha.7.
+References to those providers in the documentation are explicitly roadmap
+placeholders rather than public API commitments.
+
 ## Client entry point
 
 ```ts

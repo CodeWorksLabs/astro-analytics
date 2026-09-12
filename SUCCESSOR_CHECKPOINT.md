@@ -1479,3 +1479,17 @@ checkout with a pinned npm dependency and use the estate's normal GitHub
 verification plus native Cloudflare Workers Builds deployment from sandbox
 `main`. The sandbox repositories, domains, pages, and test purpose remain
 permanent; only the temporary private-package acquisition path is retired.
+
+## Public documentation preparation — 2026-09-12
+
+Phil authorized preparation and publication of the product documentation at
+`https://docs.codeworkslabs.dev/analytics-for-astro/` before Matomo and Umami
+adapter development resumes. Canonical alpha.7 documentation now states that
+Fathom, Plausible, and Google Analytics 4 are implemented and that Matomo and
+Umami are planned first-stable providers only: alpha.7 does not accept their
+provider names, load their scripts, or expose event results for them. The event
+guide was also corrected to name the existing GA4 `gtag()` event path. Product
+verification remains clean at 97/97 tests plus strict typecheck. These docs are
+to be published as a self-contained, provenance-bound snapshot in the public
+docs-site repository; no private product source tarball is to enter that public
+repository.

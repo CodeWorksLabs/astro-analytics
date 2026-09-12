@@ -6,6 +6,8 @@ is not published to npm.
 
 > [!IMPORTANT]
 > Milestone 2 includes real Fathom, Plausible, and Google Analytics 4 adapters.
+> Matomo and Umami are approved for the first stable provider set but are not
+> implemented in alpha.7; their names and configuration are not yet accepted.
 > Deferred/external consent activation is not implemented, and this private alpha is not yet a
 > general production analytics release.
 
@@ -69,6 +71,10 @@ validated by the public helper but are not sent to Fathom. Plausible receives
 up to 30 validated custom properties through its `props` option. GA4 receives
 up to 25 validated parameters and reserves `send_to` for package-controlled
 Measurement ID routing.
+
+Matomo and Umami are the next planned adapters. Until their numbered alpha
+candidates are implemented, documented, reviewed, and live-qualified, alpha.7
+does not load either tracker or accept either provider name.
 
 ## Documentation
 

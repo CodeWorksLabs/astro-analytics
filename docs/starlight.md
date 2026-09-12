@@ -39,3 +39,6 @@ Starlight.
 
 Milestone 2 loads Fathom, Plausible, or immediate-consent Google Analytics 4
 and tracks Astro-lifecycle-owned pageviews in production output.
+
+The planned Matomo and Umami adapters will use this same Starlight wrapper after
+they are implemented and qualified. Alpha.7 does not accept either provider.

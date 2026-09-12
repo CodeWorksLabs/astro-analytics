@@ -76,6 +76,12 @@ publication, site integration, or deployment. Before any release:
 The current `private: true` manifest is an additional fail-closed publication
 guard. Removing it requires separate release authorization and review.
 
+Matomo and Umami are planned feature additions and therefore require later
+numbered alpha candidates with documentation, review, package, consumer, and
+live-provider evidence. Their placeholder documentation does not make them part
+of alpha.7's public contract. The line may advance to an RC only after all five
+accepted providers are implemented and the feature set is believed complete.
+
 The package does not currently advertise the `astro-integration` discovery
 keyword because `astro add` invokes a zero-argument default factory and this
 integration requires explicit provider configuration. Add that keyword only

@@ -7,6 +7,12 @@ release claim.
 
 ## Unreleased
 
+- Prepare public documentation for the Analytics for Astro title and clearly
+  mark Matomo and Umami as planned first-stable providers that are not accepted
+  or loaded by alpha.7.
+- Correct the event guide to include the implemented Google Analytics 4 event
+  path alongside Fathom and Plausible.
+
 ## 0.1.0-alpha.7 - Candidate
 
 - Correct the GA4 `gtag()` queue contract to push the canonical JavaScript
