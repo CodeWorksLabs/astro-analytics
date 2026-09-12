@@ -6,7 +6,6 @@ import type {
 export interface AnalyticsEvent {
   name: string;
   properties?: Record<string, string | number | boolean>;
-  value?: number;
 }
 
 export interface AdapterRuntimePlan {

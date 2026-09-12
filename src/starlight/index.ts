@@ -1,14 +1,6 @@
-import type { AstroAnalyticsConfig } from "../config.ts";
-import astroAnalytics from "../index.ts";
-
-interface StarlightPlugin {
-  name: string;
-  hooks: {
-    "config:setup": (context: {
-      addIntegration: (integration: ReturnType<typeof astroAnalytics>) => void;
-    }) => void;
-  };
-}
+import type { StarlightPlugin } from "@astrojs/starlight/types";
+import type { AstroAnalyticsConfig } from "#config";
+import astroAnalytics from "#core";
 
 export function starlightAnalytics(
   config: AstroAnalyticsConfig,

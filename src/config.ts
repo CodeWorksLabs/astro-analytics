@@ -1,5 +1,7 @@
 export type AnalyticsCommand = "dev" | "build" | "preview" | "sync";
 export type PageviewMode = "provider" | "astro" | "none";
+export type ConsentMode = "immediate" | "deferred" | "external";
+export type ConsentState = "granted" | "denied";
 
 export interface AnalyticsEnvironments {
   production?: boolean;
@@ -7,18 +9,19 @@ export interface AnalyticsEnvironments {
   development?: boolean;
 }
 
+/** @deprecated Event queueing and alternate globals are not part of the current client. */
 export interface EventOptions {
   globalName?: "astroAnalytics";
   queue?: false | { maxSize: number };
 }
 
 export interface GoogleConsentConfig {
-  mode: "immediate" | "deferred" | "external";
+  mode: ConsentMode;
   initial?: {
-    analyticsStorage: "granted" | "denied";
-    adStorage?: "granted" | "denied";
-    adUserData?: "granted" | "denied";
-    adPersonalization?: "granted" | "denied";
+    analyticsStorage: ConsentState;
+    adStorage?: ConsentState;
+    adUserData?: ConsentState;
+    adPersonalization?: ConsentState;
   };
 }
 
@@ -35,7 +38,7 @@ export interface PlausibleProvider {
   name: "plausible";
   scriptSrc: string;
   pageviews?: PageviewMode;
-  consent?: { mode: "immediate" | "deferred" | "external" };
+  consent?: { mode: ConsentMode };
   endpoint?: string;
   captureOnLocalhost?: boolean;
 }
@@ -45,7 +48,7 @@ export interface FathomProvider {
   siteId: string;
   scriptSrc?: string;
   pageviews?: PageviewMode;
-  consent?: { mode: "immediate" | "deferred" | "external" };
+  consent?: { mode: ConsentMode };
   honorDnt?: boolean;
   canonical?: boolean;
 }
@@ -55,10 +58,16 @@ export type AnalyticsProvider =
   | PlausibleProvider
   | FathomProvider;
 
+export type NormalizedAnalyticsProvider = AnalyticsProvider & {
+  pageviews: PageviewMode;
+};
+
 export interface AstroAnalyticsConfig {
   enabled?: boolean;
   environments?: AnalyticsEnvironments;
-  provider: false | AnalyticsProvider;
+  /** @deprecated Use providers for multi-provider operation. */
+  provider?: false | AnalyticsProvider;
+  providers?: false | readonly AnalyticsProvider[];
   events?: boolean | EventOptions;
   debug?: boolean;
 }
@@ -66,112 +75,435 @@ export interface AstroAnalyticsConfig {
 export interface NormalizedAstroAnalyticsConfig {
   enabled: boolean;
   environments: Required<AnalyticsEnvironments>;
-  provider: false | (AnalyticsProvider & { pageviews: PageviewMode });
-  events: false | Required<EventOptions>;
+  /** Normalized legacy input; absent when providers was supplied. */
+  provider?: false | NormalizedAnalyticsProvider | undefined;
+  providers: false | readonly NormalizedAnalyticsProvider[];
+  events: boolean;
   debug: boolean;
 }
 
-const SAFE_PROTOCOLS = new Set(["https:"]);
-const DEFAULT_FATHOM_SCRIPT = "https://cdn.usefathom.com/script.js";
+type UnknownRecord = Record<string, unknown>;
 
-function requireNonEmpty(value: string, path: string): string {
-  const normalized = value.trim();
+const DEFAULT_FATHOM_SCRIPT = "https://cdn.usefathom.com/script.js";
+const PAGEVIEW_MODES = new Set<PageviewMode>(["provider", "astro", "none"]);
+const CONSENT_MODES = new Set<ConsentMode>([
+  "immediate",
+  "deferred",
+  "external",
+]);
+const CONSENT_STATES = new Set<ConsentState>(["granted", "denied"]);
+
+function hasOwn(value: UnknownRecord, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function expectObject(value: unknown, path: string): UnknownRecord {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError(`${path} must be an object.`);
+  }
+  const prototype = Reflect.getPrototypeOf(value);
+  if (prototype !== null && prototype !== Object.prototype) {
+    throw new TypeError(`${path} must be a plain or null-prototype record.`);
+  }
+  return value as UnknownRecord;
+}
+
+function assertExactKeys(
+  value: UnknownRecord,
+  allowed: readonly string[],
+  path: string,
+): void {
+  const allowedKeys = new Set(allowed);
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string") {
+      throw new TypeError(`${path} contains an unsupported symbol key.`);
+    }
+    if (!allowedKeys.has(key)) {
+      throw new TypeError(`${path}.${key} is not supported.`);
+    }
+  }
+}
+
+function expectBoolean(value: unknown, path: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new TypeError(`${path} must be a boolean.`);
+  }
+  return value;
+}
+
+function expectString(value: unknown, path: string): string {
+  if (typeof value !== "string") {
+    throw new TypeError(`${path} must be a string.`);
+  }
+  return value;
+}
+
+function requireNonEmpty(value: unknown, path: string): string {
+  const normalized = expectString(value, path).trim();
   if (!normalized) throw new TypeError(`${path} must not be empty.`);
   return normalized;
 }
 
-function validateHttpsUrl(value: string, path: string): string {
+function validateHttpsUrl(value: unknown, path: string): string {
+  const text = expectString(value, path);
   let url: URL;
   try {
-    url = new URL(value);
+    url = new URL(text);
   } catch {
     throw new TypeError(`${path} must be an absolute HTTPS URL.`);
   }
-  if (!SAFE_PROTOCOLS.has(url.protocol) || url.username || url.password) {
-    throw new TypeError(`${path} must be an absolute HTTPS URL without credentials.`);
+  if (url.protocol !== "https:" || url.username || url.password) {
+    throw new TypeError(
+      `${path} must be an absolute HTTPS URL without credentials.`,
+    );
   }
   return url.href;
 }
 
-function normalizeProvider(provider: AnalyticsProvider): AnalyticsProvider & {
+function normalizePageviews(value: unknown, path: string): PageviewMode {
+  if (typeof value !== "string" || !PAGEVIEW_MODES.has(value as PageviewMode)) {
+    throw new TypeError(`${path} must be provider, astro, or none.`);
+  }
+  return value as PageviewMode;
+}
+
+function normalizeConsentMode(value: unknown, path: string): ConsentMode {
+  if (typeof value !== "string" || !CONSENT_MODES.has(value as ConsentMode)) {
+    throw new TypeError(`${path} must be immediate, deferred, or external.`);
+  }
+  return value as ConsentMode;
+}
+
+function normalizeConsentState(value: unknown, path: string): ConsentState {
+  if (typeof value !== "string" || !CONSENT_STATES.has(value as ConsentState)) {
+    throw new TypeError(`${path} must be granted or denied.`);
+  }
+  return value as ConsentState;
+}
+
+function normalizeSimpleConsent(value: unknown, path: string): { mode: ConsentMode } {
+  const consent = expectObject(value, path);
+  assertExactKeys(consent, ["mode"], path);
+  if (!hasOwn(consent, "mode")) {
+    throw new TypeError(`${path}.mode is required.`);
+  }
+  return { mode: normalizeConsentMode(consent.mode, `${path}.mode`) };
+}
+
+function normalizeGoogleConsent(value: unknown): GoogleConsentConfig {
+  const path = "provider.consent";
+  const consent = expectObject(value, path);
+  assertExactKeys(consent, ["mode", "initial"], path);
+  if (!hasOwn(consent, "mode")) {
+    throw new TypeError("Google Analytics (GA4) requires an explicit consent.mode.");
+  }
+
+  const normalized: GoogleConsentConfig = {
+    mode: normalizeConsentMode(consent.mode, `${path}.mode`),
+  };
+  if (hasOwn(consent, "initial")) {
+    const initialPath = `${path}.initial`;
+    const initial = expectObject(consent.initial, initialPath);
+    assertExactKeys(
+      initial,
+      ["analyticsStorage", "adStorage", "adUserData", "adPersonalization"],
+      initialPath,
+    );
+    if (!hasOwn(initial, "analyticsStorage")) {
+      throw new TypeError(`${initialPath}.analyticsStorage is required.`);
+    }
+    normalized.initial = {
+      analyticsStorage: normalizeConsentState(
+        initial.analyticsStorage,
+        `${initialPath}.analyticsStorage`,
+      ),
+    };
+    for (const key of [
+      "adStorage",
+      "adUserData",
+      "adPersonalization",
+    ] as const) {
+      if (hasOwn(initial, key)) {
+        normalized.initial[key] = normalizeConsentState(
+          initial[key],
+          `${initialPath}.${key}`,
+        );
+      }
+    }
+  }
+  return normalized;
+}
+
+function normalizeProviderConfig(value: unknown): Record<string, string | number | boolean> {
+  const path = "provider.config";
+  const config = expectObject(value, path);
+  const normalized: Record<string, string | number | boolean> = {};
+  for (const key of Reflect.ownKeys(config)) {
+    if (typeof key !== "string") {
+      throw new TypeError(`${path} contains an unsupported symbol key.`);
+    }
+    const entry = Reflect.get(config, key) as unknown;
+    if (
+      typeof entry !== "string" &&
+      typeof entry !== "boolean" &&
+      (typeof entry !== "number" || !Number.isFinite(entry))
+    ) {
+      throw new TypeError(`${path}.${key} must be a string, finite number, or boolean.`);
+    }
+    Object.defineProperty(normalized, key, {
+      configurable: true,
+      enumerable: true,
+      value: entry,
+      writable: true,
+    });
+  }
+  return normalized;
+}
+
+function normalizeGoogle(provider: UnknownRecord): GoogleAnalyticsProvider & {
   pageviews: PageviewMode;
 } {
+  assertExactKeys(
+    provider,
+    ["name", "measurementId", "scriptSrc", "pageviews", "consent", "config"],
+    "provider",
+  );
+  if (!hasOwn(provider, "measurementId")) {
+    throw new TypeError("provider.measurementId is required.");
+  }
+  const measurementId = requireNonEmpty(
+    provider.measurementId,
+    "provider.measurementId",
+  );
+  if (!/^G-[A-Z0-9]+$/i.test(measurementId)) {
+    throw new TypeError("provider.measurementId must be a GA4 G- identifier.");
+  }
+  if (!hasOwn(provider, "consent")) {
+    throw new TypeError("Google Analytics (GA4) requires an explicit consent.mode.");
+  }
+
+  const normalized: GoogleAnalyticsProvider & { pageviews: PageviewMode } = {
+    name: "google-analytics",
+    measurementId,
+    scriptSrc: validateHttpsUrl(
+      hasOwn(provider, "scriptSrc")
+        ? provider.scriptSrc
+        : `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`,
+      "provider.scriptSrc",
+    ),
+    pageviews: hasOwn(provider, "pageviews")
+      ? normalizePageviews(provider.pageviews, "provider.pageviews")
+      : "provider",
+    consent: normalizeGoogleConsent(provider.consent),
+  };
+  if (hasOwn(provider, "config")) {
+    normalized.config = normalizeProviderConfig(provider.config);
+  }
+  return normalized;
+}
+
+function normalizePlausible(provider: UnknownRecord): PlausibleProvider & {
+  pageviews: PageviewMode;
+} {
+  assertExactKeys(
+    provider,
+    ["name", "scriptSrc", "pageviews", "consent", "endpoint", "captureOnLocalhost"],
+    "provider",
+  );
+  if (!hasOwn(provider, "scriptSrc")) {
+    throw new TypeError("provider.scriptSrc is required.");
+  }
+  const normalized: PlausibleProvider & { pageviews: PageviewMode } = {
+    name: "plausible",
+    scriptSrc: validateHttpsUrl(provider.scriptSrc, "provider.scriptSrc"),
+    pageviews: hasOwn(provider, "pageviews")
+      ? normalizePageviews(provider.pageviews, "provider.pageviews")
+      : "provider",
+  };
+  if (hasOwn(provider, "consent")) {
+    normalized.consent = normalizeSimpleConsent(
+      provider.consent,
+      "provider.consent",
+    );
+  }
+  if (hasOwn(provider, "endpoint")) {
+    normalized.endpoint = validateHttpsUrl(
+      provider.endpoint,
+      "provider.endpoint",
+    );
+  }
+  if (hasOwn(provider, "captureOnLocalhost")) {
+    normalized.captureOnLocalhost = expectBoolean(
+      provider.captureOnLocalhost,
+      "provider.captureOnLocalhost",
+    );
+  }
+  return normalized;
+}
+
+function normalizeFathom(provider: UnknownRecord): FathomProvider & {
+  pageviews: PageviewMode;
+} {
+  assertExactKeys(
+    provider,
+    ["name", "siteId", "scriptSrc", "pageviews", "consent", "honorDnt", "canonical"],
+    "provider",
+  );
+  if (!hasOwn(provider, "siteId")) {
+    throw new TypeError("provider.siteId is required.");
+  }
+  const normalized: FathomProvider & { pageviews: PageviewMode } = {
+    name: "fathom",
+    siteId: requireNonEmpty(provider.siteId, "provider.siteId"),
+    scriptSrc: validateHttpsUrl(
+      hasOwn(provider, "scriptSrc")
+        ? provider.scriptSrc
+        : DEFAULT_FATHOM_SCRIPT,
+      "provider.scriptSrc",
+    ),
+    pageviews: hasOwn(provider, "pageviews")
+      ? normalizePageviews(provider.pageviews, "provider.pageviews")
+      : "provider",
+  };
+  if (hasOwn(provider, "consent")) {
+    normalized.consent = normalizeSimpleConsent(
+      provider.consent,
+      "provider.consent",
+    );
+  }
+  if (hasOwn(provider, "honorDnt")) {
+    normalized.honorDnt = expectBoolean(
+      provider.honorDnt,
+      "provider.honorDnt",
+    );
+  }
+  if (hasOwn(provider, "canonical")) {
+    normalized.canonical = expectBoolean(
+      provider.canonical,
+      "provider.canonical",
+    );
+  }
+  return normalized;
+}
+
+function normalizeProvider(value: unknown): NormalizedAnalyticsProvider {
+  const provider = expectObject(value, "provider");
+  if (!hasOwn(provider, "name") || typeof provider.name !== "string") {
+    throw new TypeError("provider.name must identify a supported provider.");
+  }
   switch (provider.name) {
-    case "google-analytics": {
-      const measurementId = requireNonEmpty(
-        provider.measurementId,
-        "provider.measurementId",
-      );
-      if (!/^G-[A-Z0-9]+$/i.test(measurementId)) {
-        throw new TypeError("provider.measurementId must be a GA4 G- identifier.");
-      }
-      if (!provider.consent?.mode) {
-        throw new TypeError("Google Analytics (GA4) requires an explicit consent.mode.");
-      }
-      return {
-        ...provider,
-        measurementId,
-        scriptSrc: validateHttpsUrl(
-          provider.scriptSrc ??
-            `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`,
-          "provider.scriptSrc",
-        ),
-        pageviews: provider.pageviews ?? "provider",
-      };
-    }
+    case "google-analytics":
+      return normalizeGoogle(provider);
     case "plausible":
-      return {
-        ...provider,
-        scriptSrc: validateHttpsUrl(provider.scriptSrc, "provider.scriptSrc"),
-        endpoint: provider.endpoint
-          ? validateHttpsUrl(provider.endpoint, "provider.endpoint")
-          : undefined,
-        pageviews: provider.pageviews ?? "provider",
-      };
+      return normalizePlausible(provider);
     case "fathom":
-      return {
-        ...provider,
-        siteId: requireNonEmpty(provider.siteId, "provider.siteId"),
-        scriptSrc: validateHttpsUrl(
-          provider.scriptSrc ?? DEFAULT_FATHOM_SCRIPT,
-          "provider.scriptSrc",
-        ),
-        pageviews: provider.pageviews ?? "provider",
-      };
+      return normalizeFathom(provider);
+    default:
+      throw new TypeError(`provider.name ${JSON.stringify(provider.name)} is not supported.`);
   }
 }
 
-export function normalizeConfig(
-  config: AstroAnalyticsConfig,
-): NormalizedAstroAnalyticsConfig {
-  if (!config || typeof config !== "object") {
-    throw new TypeError("astroAnalytics() requires a configuration object.");
+function normalizeProviders(
+  value: unknown,
+): false | readonly NormalizedAnalyticsProvider[] {
+  if (value === false) return false;
+  if (!Array.isArray(value)) {
+    throw new TypeError("configuration.providers must be an array or false.");
   }
-
-  const events =
-    config.events === true
-      ? { globalName: "astroAnalytics" as const, queue: false as const }
-      : config.events
-        ? {
-            globalName: config.events.globalName ?? ("astroAnalytics" as const),
-            queue: config.events.queue ?? (false as const),
-          }
-        : false;
-
-  if (events && events.queue && (!Number.isInteger(events.queue.maxSize) || events.queue.maxSize < 1 || events.queue.maxSize > 100)) {
-    throw new TypeError("events.queue.maxSize must be an integer from 1 to 100.");
+  if (value.length === 0) {
+    throw new TypeError("configuration.providers must not be empty; use false to disable analytics.");
   }
+  const providers = value.map((provider) => normalizeProvider(provider));
+  const names = new Set<AnalyticsProvider["name"]>();
+  for (const provider of providers) {
+    if (names.has(provider.name)) {
+      throw new TypeError(
+        `configuration.providers contains duplicate provider ${JSON.stringify(provider.name)}.`,
+      );
+    }
+    names.add(provider.name);
+  }
+  return Object.freeze(providers);
+}
 
+function normalizeEnvironments(value: unknown): Required<AnalyticsEnvironments> {
+  const environments = expectObject(value, "environments");
+  assertExactKeys(
+    environments,
+    ["production", "preview", "development"],
+    "environments",
+  );
   return {
-    enabled: config.enabled ?? true,
-    environments: {
-      production: config.environments?.production ?? true,
-      preview: config.environments?.preview ?? false,
-      development: config.environments?.development ?? false,
-    },
-    provider: config.provider === false ? false : normalizeProvider(config.provider),
-    events,
-    debug: config.debug ?? false,
+    production: hasOwn(environments, "production")
+      ? expectBoolean(environments.production, "environments.production")
+      : true,
+    preview: hasOwn(environments, "preview")
+      ? expectBoolean(environments.preview, "environments.preview")
+      : false,
+    development: hasOwn(environments, "development")
+      ? expectBoolean(environments.development, "environments.development")
+      : false,
+  };
+}
+
+function normalizeEvents(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  const events = expectObject(value, "configuration.events");
+  assertExactKeys(events, ["globalName", "queue"], "configuration.events");
+  if (hasOwn(events, "globalName") && events.globalName !== "astroAnalytics") {
+    throw new TypeError('configuration.events.globalName must be "astroAnalytics".');
+  }
+  if (hasOwn(events, "queue") && events.queue !== false) {
+    const queue = expectObject(events.queue, "configuration.events.queue");
+    assertExactKeys(queue, ["maxSize"], "configuration.events.queue");
+    if (!hasOwn(queue, "maxSize") || typeof queue.maxSize !== "number" ||
+        !Number.isInteger(queue.maxSize) || queue.maxSize < 1 || queue.maxSize > 100) {
+      throw new TypeError("configuration.events.queue.maxSize must be an integer from 1 to 100.");
+    }
+  }
+  return true;
+}
+
+export function normalizeConfig(configValue: unknown): NormalizedAstroAnalyticsConfig {
+  const config = expectObject(configValue, "astroAnalytics() configuration");
+  assertExactKeys(
+    config,
+    ["enabled", "environments", "provider", "providers", "events", "debug"],
+    "configuration",
+  );
+  const hasProvider = hasOwn(config, "provider");
+  const hasProviders = hasOwn(config, "providers");
+  if (!hasProvider && !hasProviders) {
+    throw new TypeError("configuration.provider is required unless configuration.providers is supplied.");
+  }
+  if (hasProvider && hasProviders) {
+    throw new TypeError("configuration.provider and configuration.providers cannot be used together.");
+  }
+  const legacyProvider = hasProvider
+    ? config.provider === false
+      ? false
+      : normalizeProvider(config.provider)
+    : undefined;
+  const providers = hasProviders
+    ? normalizeProviders(config.providers)
+    : legacyProvider === false
+      ? false
+      : Object.freeze([legacyProvider as NormalizedAnalyticsProvider]);
+  return {
+    enabled: hasOwn(config, "enabled")
+      ? expectBoolean(config.enabled, "configuration.enabled")
+      : true,
+    environments: hasOwn(config, "environments")
+      ? normalizeEnvironments(config.environments)
+      : { production: true, preview: false, development: false },
+    ...(hasProvider ? { provider: legacyProvider } : {}),
+    providers,
+    events: hasOwn(config, "events")
+      ? normalizeEvents(config.events)
+      : false,
+    debug: hasOwn(config, "debug")
+      ? expectBoolean(config.debug, "configuration.debug")
+      : false,
   };
 }
 
@@ -179,8 +511,16 @@ export function isEnabledForCommand(
   config: NormalizedAstroAnalyticsConfig,
   command: AnalyticsCommand,
 ): boolean {
-  if (!config.enabled || config.provider === false || command === "sync") return false;
-  if (command === "build") return config.environments.production;
-  if (command === "preview") return config.environments.preview;
-  return config.environments.development;
+  if (!config.enabled || config.providers === false) return false;
+  switch (command) {
+    case "build":
+      return config.environments.production;
+    case "preview":
+      return config.environments.preview;
+    case "dev":
+      return config.environments.development;
+    case "sync":
+    default:
+      return false;
+  }
 }

@@ -1,24 +1,61 @@
 {
   "name": "@codeworkslabs/astro-analytics",
-  "version": "0.0.0",
+  "version": "0.1.0-alpha.7",
+  "description": "A strict analytics integration foundation for Astro and Starlight.",
   "private": true,
   "license": "MIT",
   "type": "module",
+  "files": [
+    "src",
+    "docs",
+    "CHANGELOG.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CodeWorksLabs/astro-analytics.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CodeWorksLabs/astro-analytics/issues"
+  },
+  "homepage": "https://github.com/CodeWorksLabs/astro-analytics#readme",
+  "keywords": [
+    "astro",
+    "analytics",
+    "starlight"
+  ],
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/events.ts",
     "./starlight": "./src/starlight/index.ts"
   },
+  "imports": {
+    "#adapter-types": "./src/adapters/types.ts",
+    "#config": "./src/config.ts",
+    "#core": "./src/index.ts",
+    "#runtime": "./src/runtime.ts"
+  },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "typecheck": "tsc --noEmit --project tsconfig.json",
+    "verify": "npm run typecheck && npm test"
   },
   "peerDependencies": {
-    "astro": ">=5"
+    "@astrojs/starlight": ">=0.41.11 <0.43",
+    "astro": ">=7.3.2 <8"
   },
   "peerDependenciesMeta": {
+    "@astrojs/starlight": {
+      "optional": true
+    },
     "astro": {
       "optional": true
     }
+  },
+  "devDependencies": {
+    "@astrojs/starlight": "0.42.0",
+    "@types/node": "22.20.2",
+    "astro": "7.3.2",
+    "typescript": "5.9.3"
   },
   "engines": {
     "node": ">=22.18.0"

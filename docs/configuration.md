@@ -1,0 +1,179 @@
+# Configuration reference
+
+The default export accepts one `AstroAnalyticsConfig` object. Configuration is
+strictly checked at runtime: unknown fields, symbol keys, malformed values, and
+non-record objects are rejected with `TypeError`.
+
+Fathom, Plausible, and Google Analytics 4 settings drive implemented Milestone
+2 adapters.
+
+## Root configuration
+
+| Field | Type | Default | Current behavior |
+| --- | --- | --- | --- |
+| `providers` | `false` or non-empty provider array | Required | `false` disables the integration; an array enables one or more independently reported providers |
+| `provider` | `false` or provider object | Deprecated | Compatibility input for one provider; cannot be combined with `providers` |
+| `enabled` | `boolean` | `true` | Master integration switch |
+| `environments` | object | Production only | Selects Astro config-setup commands that may inject analytics |
+| `events` | `boolean` or deprecated options object | `false` | `true` installs the package event client; the legacy object form is accepted as enabled compatibility input |
+| `debug` | `boolean` | `false` | Reserved normalized setting; Milestone 2 emits no debug output |
+
+Only the listed keys are accepted.
+
+Provider order is preserved. Duplicate provider names are rejected because one
+runtime adapter owns each provider identity. An empty array is rejected; use
+`providers: false` to disable analytics. Simultaneous sources belong in one
+`providers` array so pageview, consent, readiness, and event outcomes remain
+independent and observable.
+
+## Environments
+
+```ts
+{
+  production?: boolean;  // default true; Astro command: build
+  preview?: boolean;     // default false; Astro command: preview
+  development?: boolean; // default false; Astro command: dev
+}
+```
+
+Each field is independent. The Astro `sync` command is always disabled.
+
+This policy is evaluated by the integration during Astro configuration setup.
+Injection becomes part of generated output; the flags are not runtime kill
+switches. In particular, `astro preview` serves an existing build and does not
+remove analytics that was included when that output was built.
+
+## Pageview modes
+
+Every provider accepts an optional `pageviews` field:
+
+| Value | Intended ownership |
+| --- | --- |
+| `"provider"` | Pageviews triggered after Astro page-load events; the default |
+| `"astro"` | Explicitly selects the same Astro page-load lifecycle |
+| `"none"` | No automatic pageviews |
+
+All three modes are implemented for Fathom, Plausible, and Google Analytics 4.
+
+## Google Analytics 4
+
+```js
+analytics({
+  providers: [
+    {
+      name: "google-analytics",
+      measurementId: "G-EXAMPLE123",
+      consent: {
+        mode: "deferred",
+        initial: {
+          analyticsStorage: "denied",
+          adStorage: "denied",
+          adUserData: "denied",
+          adPersonalization: "denied",
+        },
+      },
+      pageviews: "provider",
+    },
+  ],
+});
+```
+
+| Field | Requirement |
+| --- | --- |
+| `name` | Exactly `"google-analytics"` |
+| `measurementId` | Required non-empty `G-` identifier containing letters or digits |
+| `consent.mode` | Required: `"immediate"`, `"deferred"`, or `"external"` |
+| `consent.initial.analyticsStorage` | Required when `initial` is present; `"granted"` or `"denied"` |
+| Other initial consent fields | Optional `"granted"` or `"denied"` values |
+| `scriptSrc` | Optional absolute HTTPS URL without credentials; defaults to the GA4 gtag URL |
+| `config` | Optional plain record of strings, finite numbers, and booleans; `send_page_view` is always forced to `false` |
+| `pageviews` | Optional pageview mode; default `"provider"` |
+
+With `consent.mode: "immediate"`, the adapter creates package-owned `gtag` and
+`dataLayer` globals, emits any configured consent default before `config`, and
+loads gtag.js. `deferred` and `external` fail closed as `consent-pending` until a
+future consent-transition API is implemented. When `initial` is supplied, set
+all four Consent Mode v2 storage fields to the site's actual policy.
+
+The adapter always disables the config command's eager pageview and sends
+manual `page_view` events after Astro's post-swap `astro:page-load` signal. It
+includes the current location and title and carries the preceding virtual URL as
+the next pageview's referrer. In the GA4 web stream, also disable **Page changes
+based on browser history events** under Enhanced Measurement; otherwise GA4 can
+send duplicate SPA pageviews independently of `send_page_view: false`.
+
+Custom events accept at most 25 properties. `send_to` is reserved and rejected
+in caller properties because the adapter supplies the configured Measurement ID.
+
+## Plausible
+
+```js
+analytics({
+  providers: [
+    {
+      name: "plausible",
+      scriptSrc: "https://analytics.example.com/js/script.js",
+      endpoint: "https://analytics.example.com/api/event",
+      consent: { mode: "immediate" },
+      captureOnLocalhost: false,
+      pageviews: "provider",
+    },
+  ],
+});
+```
+
+`scriptSrc` is required. `scriptSrc` and `endpoint` must be absolute HTTPS URLs
+without embedded credentials. `captureOnLocalhost` must be boolean. Consent, when
+present, contains only `mode`. The script URL is Plausible's current
+site-specific snippet URL, such as `https://plausible.io/js/pa-XXXXX.js`.
+
+The adapter calls `plausible.init()` before loading the script with
+`autoCapturePageviews: false`, the configured endpoint when present, and the
+configured localhost policy. Astro owns initial and client-navigation
+pageviews. Omit consent or use `immediate` to load Plausible; `deferred` and
+`external` fail closed until the shared consent controller is implemented.
+
+## Fathom
+
+```js
+analytics({
+  providers: [
+    {
+      name: "fathom",
+      siteId: "YOUR-SITE-ID",
+      consent: { mode: "external" },
+      honorDnt: true,
+      canonical: true,
+      pageviews: "provider",
+    },
+  ],
+});
+```
+
+`siteId` is required and is trimmed. `scriptSrc` is optional and defaults to
+`https://cdn.usefathom.com/script.js`. `honorDnt` and `canonical` must be boolean.
+Consent, when present, contains only `mode`. Omit consent or use `immediate` to
+load Fathom. `deferred` and `external` fail closed: the vendor is not loaded and
+event calls return `consent-pending` because this candidate has no activation API.
+Consent mode is fixed before the first Fathom load attempt. A conflicting later
+bootstrap cannot retroactively cancel an already prepared vendor script and is
+therefore ignored; no runtime consent-transition API is provided.
+
+For Fathom, `honorDnt: true` emits `data-honor-dnt="true"` and
+`canonical: false` emits `data-canonical="false"`. The default
+`pageviews: "provider"` disables Fathom's eager automation and invokes Fathom
+after Astro's `astro:page-load` event so canonical content has already swapped
+on client navigation, including browser history traversal. Initial script
+readiness sends the initial document only when no navigation is in flight. If a
+post-swap page-load arrives before Fathom is ready, it is retained and sent once
+the vendor loads; a load during an in-flight navigation waits for the post-swap
+signal. `pageviews: "astro"` currently selects the same behavior explicitly.
+`pageviews: "none"` sends no pageviews.
+
+## Disabled configuration
+
+```js
+analytics({ providers: false });
+```
+
+This disables injection even if `events: true` or an environment flag is true.
