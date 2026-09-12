@@ -5,9 +5,12 @@ Updated: 2026-09-12
 ## Current State
 
 The independent product repository is
-`C:\CodeProjects\Products\Astro Analytics` on `main`. The working candidate is
-based on commit `5702da4a9fb5e5e3c3b3b9683bcb3a675b3a0bad` and remains uncommitted.
-No files are staged. No commit, push, package publication, or production-site
+`C:\CodeProjects\Products\Astro Analytics` on temporary pre-RC branch
+`codex/pre-rc`, tracking `origin/codex/pre-rc`. Phil authorized a durable remote
+snapshot on 2026-09-12. The complete alpha.7 candidate was committed as
+`6f6e1c0` (`Preserve Analytics for Astro alpha.7 candidate`) and pushed to the
+private GitHub remote. The branch is intended to be merged and deleted when the
+release candidate is accepted. No package publication or production-site
 integration has been authorized. The previously authorized Astro sandbox
 deployment described below has been completed.
 
