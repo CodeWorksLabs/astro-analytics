@@ -1513,6 +1513,26 @@ this product commit and packed SHA-256
 ignore the private tarball in their public repositories, and contain verified
 GitHub Actions workflows for private checkout, hash validation, consumer gates,
 and Wrangler deployment. Phil confirmed credential creation. GitHub then
-required interactive sudo reauthentication, which must be completed by Phil
-before the read-only GitHub App and scoped Cloudflare token can be created and
-the two commits safely pushed.
+required interactive sudo reauthentication, which Phil completed.
+
+The organization-owned GitHub App `CodeWorksLabs Sandbox Builds` was created on
+2026-09-12 with App ID `4923745`. It has no webhook, OAuth flow, organization
+permissions, or user permissions; its only repository permissions are read-only
+Contents plus GitHub's mandatory read-only Metadata permission. Installation
+`161215866` is restricted to the single private repository
+`CodeWorksLabs/astro-analytics`. The App ID and downloaded private key were
+installed as encrypted Actions secrets named `CWL_BUILD_APP_ID` and
+`CWL_BUILD_APP_PRIVATE_KEY` in both public sandbox repositories and their secret
+names/timestamps were verified. The downloaded PEM remains locally at the
+product repository root pending Phil's retention/deletion decision and is
+excluded locally through `.git/info/exclude`; it must never be committed.
+
+Cloudflare's current API-token permission model cannot scope `Workers Scripts
+Edit` to individual Worker script names. The narrowest supported external-CI
+token is account-scoped Workers Scripts write access, optionally combined with
+zone-scoped Workers Routes access for `codeworkslabs.dev`. Do not broaden the
+original two-Worker intent silently: obtain Phil's explicit decision on this
+platform limitation before creating the Cloudflare token. Until that token is
+stored as `CLOUDFLARE_API_TOKEN` in both sandbox repositories, do not push the
+two prepared sandbox commits because each push would trigger its deploy
+workflow.
