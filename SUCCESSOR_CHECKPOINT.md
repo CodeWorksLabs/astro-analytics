@@ -10,9 +10,11 @@ The independent product repository is
 snapshot on 2026-09-12. The complete alpha.7 candidate was committed as
 `6f6e1c0` (`Preserve Analytics for Astro alpha.7 candidate`) and pushed to the
 private GitHub remote. The branch is intended to be merged and deleted when the
-release candidate is accepted. No package publication or production-site
-integration has been authorized. The previously authorized Astro sandbox
-deployment described below has been completed.
+release candidate is accepted. Ongoing commits and pushes are authorized only
+on `codex/pre-rc`. Direct commits or pushes to `main`, merging into `main`,
+tags, package publication, and production-site integration remain unauthorized
+unless Phil explicitly changes that boundary. The previously authorized Astro
+sandbox deployment described below has been completed.
 
 The package remains private under the MIT license. The current intended
 Milestone 2 working candidate version is `0.1.0-alpha.7`; it has not been tagged,
