@@ -1,15 +1,15 @@
 # Analytics for Astro documentation
 
-These documents describe the public-source `0.1.0-alpha.7` Milestone 2 candidate of
+These documents describe the public-source, unreleased `0.1.0-alpha.8` Milestone 2 candidate of
 `@codeworkslabs/astro-analytics`.
 
-Milestone 2 provides real Fathom, Plausible, and Google Analytics 4 adapters for
+Milestone 2 provides real Fathom, Plausible, Google Analytics 4, and Matomo adapters for
 pageviews and bounded custom events. The runtime provides simultaneous-provider
 coordination, exact per-provider outcomes, and provider readiness diagnostics.
 No event queue or runtime consent-transition API is implemented.
 
-Matomo and Umami are approved roadmap providers for the first stable release.
-They are placeholders only in alpha.7: neither provider is accepted by the
+Umami is the remaining approved roadmap provider for the first stable release.
+It is a placeholder only in alpha.8: its provider name is not accepted by the
 configuration schema, injected into a page, or exposed by the event client.
 
 ## Guides

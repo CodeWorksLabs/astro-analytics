@@ -1,14 +1,14 @@
 # Analytics for Astro
 
 `@codeworkslabs/astro-analytics` is an experimental reusable analytics
-integration for Astro. It is currently a private `0.1.0-alpha.7` candidate and
-is not published to npm.
+integration for Astro. Its source is public. The current working version is an
+unreleased `0.1.0-alpha.8` candidate and is not published to npm.
 
 > [!IMPORTANT]
-> Milestone 2 includes real Fathom, Plausible, and Google Analytics 4 adapters.
-> Matomo and Umami are approved for the first stable provider set but are not
-> implemented in alpha.7; their names and configuration are not yet accepted.
-> Deferred/external consent activation is not implemented, and this private alpha is not yet a
+> Milestone 2 includes real Fathom, Plausible, Google Analytics 4, and Matomo
+> adapters. Umami remains approved for the first stable provider set but is not
+> implemented in alpha.8. Deferred/external consent activation is not
+> implemented, and this alpha is not yet a
 > general production analytics release.
 
 ## Quick start
@@ -44,11 +44,11 @@ bounded event helper to `fathom.trackEvent()`.
 
 The package currently provides:
 
-- strict runtime normalization for disabled, Google Analytics, Plausible, and
-  Fathom provider configuration;
+- strict runtime normalization for disabled, Google Analytics, Plausible,
+  Fathom, and Matomo provider configuration;
 - explicit production, preview, and development enablement;
 - HTTPS-only validation for configurable script and event endpoints;
-- real Fathom, Plausible, and Google Analytics 4 pageview and event adapters;
+- real Fathom, Plausible, Google Analytics 4, and Matomo pageview and event adapters;
 - an optional event client enabled only by `events: true`;
 - a provider registry for simultaneous analytics sources;
 - a non-throwing `track()` helper with bounded event names, properties, and
@@ -59,7 +59,8 @@ The package currently provides:
   component overrides.
 
 `events: false` and an omitted `events` option install no package event global,
-but enabled Fathom, Plausible, and immediate-consent GA4 providers still load for pageview analytics.
+but enabled Fathom, Plausible, immediate-consent GA4, and immediate-consent
+Matomo providers still load for pageview analytics.
 `events: true` installs a frozen, package-owned client. Each configured provider
 returns its own result. Fathom returns `adapter-not-loaded` until its verified
 browser API is ready, then dispatches through `fathom.trackEvent()` without
@@ -72,9 +73,13 @@ up to 30 validated custom properties through its `props` option. GA4 receives
 up to 25 validated parameters and reserves `send_to` for package-controlled
 Measurement ID routing.
 
-Matomo and Umami are the next planned adapters. Until their numbered alpha
-candidates are implemented, documented, reviewed, and live-qualified, alpha.7
-does not load either tracker or accept either provider name.
+Matomo maps the configured event category and package event name to Matomo's
+category/action pair. Optional `_name` and `_value` properties fill Matomo's
+event-name and event-value positions; other validated properties are not sent
+to Matomo. With `pageviews: "none"`, Astro navigation still refreshes Matomo's
+URL, title, and virtual-referrer context so later events are attributed to the
+last completed route, but no automatic pageview is sent. Umami remains the next
+planned adapter.
 
 ## Documentation
 
@@ -105,5 +110,5 @@ Astro operating knowledge belongs under `C:\CodeProjects\Platforms\Astro`.
 Repository rules are in `AGENTS.md`, and recovery state is maintained in
 `SUCCESSOR_CHECKPOINT.md`.
 
-The private development remote is
+The public source repository is
 `https://github.com/CodeWorksLabs/astro-analytics`.

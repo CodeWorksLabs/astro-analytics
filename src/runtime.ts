@@ -2,6 +2,7 @@ export const RUNTIME_CLIENT_BRAND = "astro-analytics:client:v1";
 export const FATHOM_SCRIPT_ID = "codeworkslabs-astro-analytics-fathom";
 export const PLAUSIBLE_SCRIPT_ID = "codeworkslabs-astro-analytics-plausible";
 export const GOOGLE_ANALYTICS_SCRIPT_ID = "codeworkslabs-astro-analytics-google-analytics";
+export const MATOMO_SCRIPT_ID = "codeworkslabs-astro-analytics-matomo";
 
 export interface AnalyticsRuntimeOptions {
   events: boolean;
@@ -44,6 +45,17 @@ export interface GoogleAnalyticsRuntimeOptions {
   pageviews: "provider" | "astro" | "none";
   runtimeToken: string;
   scriptSrc: string;
+}
+
+export interface MatomoRuntimeOptions {
+  consentMode?: "immediate" | "deferred" | "external" | undefined;
+  eventCategory: string;
+  events: boolean;
+  pageviews: "provider" | "astro" | "none";
+  runtimeToken: string;
+  scriptSrc: string;
+  siteId: string;
+  trackerUrl: string;
 }
 
 export function createBootstrapScript(
@@ -1373,6 +1385,445 @@ export function createGoogleAnalyticsBootstrapScript(
       } catch {
         cleanup();
       }
+    };
+    const coordinator = Object.freeze({ run, runtimeToken: config.runtimeToken });
+    if (Reflect.defineProperty(documentValue, coordinatorKey, {
+      configurable: false, value: coordinator, writable: false
+    }) !== true || Reflect.get(documentValue, coordinatorKey) !== coordinator) return;
+    Reflect.apply(run, coordinator, [config]);
+  } catch {
+    // Provider failure must not prevent the page from rendering.
+  }
+})();`;
+}
+
+export function createMatomoBootstrapScript(
+  options: MatomoRuntimeOptions,
+): string {
+  const serializedOptions = JSON.stringify(options);
+  return `(() => {
+  "use strict";
+  const config = ${serializedOptions};
+  const brand = ${JSON.stringify(RUNTIME_CLIENT_BRAND)};
+  const scriptId = ${JSON.stringify(MATOMO_SCRIPT_ID)};
+  try {
+    const root = globalThis;
+    const documentValue = Reflect.get(root, "document");
+    if ((typeof documentValue !== "object" && typeof documentValue !== "function") || documentValue === null) return;
+    const symbolValue = Reflect.get(root, "Symbol");
+    if ((typeof symbolValue !== "object" && typeof symbolValue !== "function") || symbolValue === null) return;
+    const symbolFor = Reflect.get(symbolValue, "for");
+    if (typeof symbolFor !== "function") return;
+    const coordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:matomo:v1"]);
+    if (typeof coordinatorKey !== "symbol") return;
+    try {
+      const existingCoordinator = Reflect.get(documentValue, coordinatorKey);
+      if ((typeof existingCoordinator === "object" || typeof existingCoordinator === "function") && existingCoordinator !== null &&
+          Reflect.get(existingCoordinator, "runtimeToken") === config.runtimeToken) {
+        const keys = Reflect.ownKeys(existingCoordinator);
+        const existingRun = Reflect.get(existingCoordinator, "run");
+        if (keys.length === 2 && keys.includes("run") && keys.includes("runtimeToken") && typeof existingRun === "function") {
+          Reflect.apply(existingRun, existingCoordinator, [config]);
+        }
+        return;
+      }
+    } catch { return; }
+
+    let active = false;
+    let activeGeneration;
+    let generationCounter = 0;
+    let handler;
+    let ownedMatomo;
+    let ownedQueue;
+    let vendorLoadProven = false;
+    let vendorReady = false;
+    let navigationObservationGap = false;
+    let navigationObserverInstalled = false;
+    let lastTrackedNavigationUrl;
+    let vendorContextNavigationUrl;
+    let pendingPageviewUrl;
+    let pendingPageviewReferrer;
+    const installHref = (() => {
+      try {
+        const href = Reflect.get(Reflect.get(root, "location"), "href");
+        return typeof href === "string" ? href : undefined;
+      } catch { return undefined; }
+    })();
+    const installTitle = (() => {
+      try {
+        const title = Reflect.get(documentValue, "title");
+        return typeof title === "string" ? title : undefined;
+      } catch { return undefined; }
+    })();
+    const installReferrer = (() => {
+      try {
+        const referrer = Reflect.get(documentValue, "referrer");
+        return typeof referrer === "string" && referrer !== "" ? referrer : undefined;
+      } catch { return undefined; }
+    })();
+    let completedNavigationUrl = installHref;
+    let completedNavigationTitle = installTitle;
+    let completedNavigationReferrer = installReferrer;
+    const sameConfig = (value) => {
+      try {
+        return (typeof value === "object" || typeof value === "function") && value !== null &&
+          Reflect.get(value, "consentMode") === config.consentMode &&
+          Reflect.get(value, "eventCategory") === config.eventCategory &&
+          Reflect.get(value, "events") === config.events &&
+          Reflect.get(value, "pageviews") === config.pageviews &&
+          Reflect.get(value, "runtimeToken") === config.runtimeToken &&
+          Reflect.get(value, "scriptSrc") === config.scriptSrc &&
+          Reflect.get(value, "siteId") === config.siteId &&
+          Reflect.get(value, "trackerUrl") === config.trackerUrl;
+      } catch { return false; }
+    };
+    const readHref = () => {
+      try {
+        const href = Reflect.get(Reflect.get(root, "location"), "href");
+        return typeof href === "string" ? href : undefined;
+      } catch { return undefined; }
+    };
+    const readTitle = () => {
+      try {
+        const title = Reflect.get(documentValue, "title");
+        return typeof title === "string" ? title : undefined;
+      } catch { return undefined; }
+    };
+    const isPrerendering = () => {
+      try { return Reflect.get(documentValue, "prerendering") === true; } catch { return false; }
+    };
+    const ensureNavigationObserver = () => {
+      if (navigationObserverInstalled) return true;
+      try {
+        const addEventListener = Reflect.get(documentValue, "addEventListener");
+        if (typeof addEventListener !== "function") {
+          navigationObservationGap = true;
+          return false;
+        }
+        Reflect.apply(addEventListener, documentValue, ["astro:page-load", recordCompletedNavigation]);
+        navigationObserverInstalled = true;
+        return true;
+      } catch {
+        navigationObservationGap = true;
+        return false;
+      }
+    };
+    const matchesOwnedVendor = () => {
+      try {
+        if (!vendorLoadProven) return false;
+        const queue = Reflect.get(root, "_paq");
+        const matomo = Reflect.get(root, "Matomo");
+        if (queue !== ownedQueue || matomo !== ownedMatomo ||
+            Reflect.get(root, "Piwik") !== ownedMatomo || Reflect.get(root, "AnalyticsTracker") !== ownedMatomo ||
+            (typeof queue !== "object" && typeof queue !== "function") || queue === null) return false;
+        const push = Reflect.get(queue, "push");
+        return typeof push === "function";
+      } catch { return false; }
+    };
+    const hasUsableVendor = () => vendorReady && matchesOwnedVendor();
+    const callQueue = (command) => {
+      try {
+        if (!hasUsableVendor()) return false;
+        const queue = Reflect.get(root, "_paq");
+        const push = Reflect.get(queue, "push");
+        Reflect.apply(push, queue, [command]);
+        return true;
+      } catch {
+        vendorReady = false;
+        return false;
+      }
+    };
+    const queueBeforeReady = (queue, command) => {
+      try {
+        const push = Reflect.get(queue, "push");
+        if (typeof push !== "function") return false;
+        Reflect.apply(push, queue, [command]);
+        return true;
+      } catch { return false; }
+    };
+    const applyVendorContext = (href, referrer, title) => {
+      if (typeof href !== "string") return false;
+      if (referrer === null) {
+        if (!callQueue(["setReferrerUrl", ""])) return false;
+      } else if (typeof referrer === "string" && !callQueue(["setReferrerUrl", referrer])) return false;
+      if (!callQueue(["setCustomUrl", href])) return false;
+      if (typeof title === "string" && !callQueue(["setDocumentTitle", title])) return false;
+      vendorContextNavigationUrl = href;
+      return true;
+    };
+    const sendPageview = (href, generation, explicitReferrer, explicitTitle) => {
+      if (!active || activeGeneration !== generation || typeof href !== "string" || href === lastTrackedNavigationUrl) return;
+      const referrerIsUnknown = explicitReferrer === null;
+      let referrer = referrerIsUnknown
+        ? null
+        : typeof explicitReferrer === "string" ? explicitReferrer : lastTrackedNavigationUrl;
+      if (!referrerIsUnknown && referrer === undefined) {
+        try {
+          const documentReferrer = Reflect.get(documentValue, "referrer");
+          if (typeof documentReferrer === "string" && documentReferrer !== "") referrer = documentReferrer;
+        } catch {}
+      }
+      const title = typeof explicitTitle === "string" ? explicitTitle : readTitle();
+      if (!applyVendorContext(href, referrer, title)) return;
+      if (callQueue(["trackPageView"])) lastTrackedNavigationUrl = href;
+    };
+    const flushCompletedNavigation = (generation) => {
+      if (!active || activeGeneration !== generation || isPrerendering()) return;
+      const href = readHref();
+      if (typeof completedNavigationUrl !== "string" || href !== completedNavigationUrl) return;
+      const pending = pendingPageviewUrl;
+      const pendingReferrer = pendingPageviewReferrer;
+      pendingPageviewUrl = undefined;
+      pendingPageviewReferrer = undefined;
+      if (config.pageviews === "none") {
+        applyVendorContext(completedNavigationUrl, completedNavigationReferrer, completedNavigationTitle);
+      } else if (typeof pending === "string" && pending === completedNavigationUrl) {
+        sendPageview(pending, generation, pendingReferrer, completedNavigationTitle);
+      }
+    };
+    const recordCompletedNavigation = () => {
+      const href = readHref();
+      if (typeof href !== "string") return;
+      const closesObservationGap = navigationObservationGap;
+      if (href !== completedNavigationUrl) {
+        completedNavigationReferrer = closesObservationGap ? null : completedNavigationUrl;
+        completedNavigationUrl = href;
+      } else if (closesObservationGap) {
+        completedNavigationReferrer = null;
+      }
+      completedNavigationTitle = readTitle();
+      pendingPageviewUrl = href;
+      pendingPageviewReferrer = completedNavigationReferrer;
+      if (closesObservationGap) {
+        navigationObservationGap = false;
+        try { run(config); } catch {}
+      }
+      if (active && typeof activeGeneration === "number" && vendorReady) {
+        flushCompletedNavigation(activeGeneration);
+      }
+    };
+    const registerHandler = () => {
+      if (!config.events || handler === undefined) return;
+      try {
+        const clientCoordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:client-coordinator:v2"]);
+        if (typeof clientCoordinatorKey !== "symbol") return;
+        const clientCoordinator = Reflect.get(root, clientCoordinatorKey);
+        const register = (typeof clientCoordinator === "object" || typeof clientCoordinator === "function") && clientCoordinator !== null
+          ? Reflect.get(clientCoordinator, "register")
+          : undefined;
+        if (typeof register !== "function" || Reflect.get(clientCoordinator, "runtimeToken") !== config.runtimeToken) return;
+        Reflect.apply(register, clientCoordinator, ["matomo", handler, config.runtimeToken]);
+      } catch {}
+    };
+    const run = (nextConfig) => {
+      if (!sameConfig(nextConfig)) return;
+      if (!ensureNavigationObserver()) {
+        registerHandler();
+        return;
+      }
+      if (navigationObservationGap) {
+        registerHandler();
+        return;
+      }
+      if (active) {
+        if (!vendorReady && matchesOwnedVendor()) {
+          vendorReady = true;
+          pendingPageviewUrl = completedNavigationUrl;
+          pendingPageviewReferrer = completedNavigationReferrer;
+          flushCompletedNavigation(activeGeneration);
+        }
+        registerHandler();
+        return;
+      }
+      const generation = ++generationCounter;
+      activeGeneration = generation;
+      vendorLoadProven = false;
+      vendorReady = false;
+      vendorContextNavigationUrl = undefined;
+      pendingPageviewUrl = completedNavigationUrl;
+      pendingPageviewReferrer = completedNavigationReferrer;
+      lastTrackedNavigationUrl = undefined;
+      const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
+      handler = Object.freeze({
+        __astroAnalyticsBrand: brand,
+        __astroAnalyticsProvider: "matomo",
+        status() {
+          if (consentPending) return "consent-pending";
+          return activeGeneration === generation && active && hasUsableVendor()
+            ? "ready"
+            : "adapter-not-loaded";
+        },
+        track(name, properties) {
+          try {
+            if (consentPending) return { ok: false, reason: "consent-pending" };
+            if (activeGeneration !== generation || !active || !hasUsableVendor()) {
+              return { ok: false, reason: "adapter-not-loaded" };
+            }
+            if (config.pageviews === "none" && typeof completedNavigationUrl === "string" &&
+                vendorContextNavigationUrl !== completedNavigationUrl &&
+                !applyVendorContext(completedNavigationUrl, completedNavigationReferrer, completedNavigationTitle)) {
+              return { ok: false, reason: "adapter-not-loaded" };
+            }
+            const hasEventName = properties !== undefined && Object.prototype.hasOwnProperty.call(properties, "_name");
+            const eventName = hasEventName ? Reflect.get(properties, "_name") : undefined;
+            if (hasEventName && (typeof eventName !== "string" || eventName.trim() === "")) {
+              return { ok: false, reason: "invalid-event" };
+            }
+            const hasValue = properties !== undefined && Object.prototype.hasOwnProperty.call(properties, "_value");
+            const value = hasValue ? Reflect.get(properties, "_value") : undefined;
+            if (hasValue && (typeof value !== "number" || !Number.isFinite(value))) {
+              return { ok: false, reason: "invalid-event" };
+            }
+            const command = ["trackEvent", config.eventCategory, name];
+            if (hasEventName || hasValue) command.push(hasEventName ? eventName : "");
+            if (hasValue) command.push(value);
+            return callQueue(command)
+              ? { ok: true }
+              : { ok: false, reason: "adapter-not-loaded" };
+          } catch { return { ok: false, reason: "adapter-not-loaded" }; }
+        }
+      });
+      registerHandler();
+      if (consentPending) return;
+
+      let localMatomo;
+      let localScript;
+      let localQueue;
+      let localQueueProxy;
+      let localPiwik;
+      let localTrackerAlias;
+      let queueBinding;
+      let matomoBinding;
+      let piwikBinding;
+      let trackerBinding;
+      const installBinding = (name, initialValue, recordOwnedValue) => {
+        let value = initialValue;
+        const get = () => value;
+        const set = (nextValue) => {
+          value = nextValue;
+          try {
+            if (localScript !== undefined && Reflect.get(documentValue, "currentScript") === localScript) {
+              Reflect.apply(recordOwnedValue, undefined, [nextValue]);
+            }
+          } catch {}
+        };
+        if (Reflect.defineProperty(root, name, {
+          configurable: true, enumerable: true, get, set
+        }) !== true) return undefined;
+        const descriptor = Reflect.getOwnPropertyDescriptor(root, name);
+        if (descriptor === undefined || descriptor.get !== get || descriptor.set !== set) return undefined;
+        return Object.freeze({ get, read: get, set });
+      };
+      const releaseBinding = (name, binding, ownedValue) => {
+        try {
+          if (binding === undefined) return;
+          const descriptor = Reflect.getOwnPropertyDescriptor(root, name);
+          if (descriptor === undefined || descriptor.get !== binding.get || descriptor.set !== binding.set) return;
+          const currentValue = Reflect.apply(binding.read, undefined, []);
+          if (currentValue === ownedValue) Reflect.deleteProperty(root, name);
+          else Reflect.defineProperty(root, name, {
+            configurable: true, enumerable: true, value: currentValue, writable: true
+          });
+        } catch {}
+      };
+      const cleanup = () => {
+        if (activeGeneration !== generation) return;
+        active = false;
+        activeGeneration = undefined;
+        vendorLoadProven = false;
+        vendorReady = false;
+        pendingPageviewUrl = undefined;
+        pendingPageviewReferrer = undefined;
+        try {
+          if ((typeof localScript === "object" || typeof localScript === "function") && localScript !== null) {
+            const remove = Reflect.get(localScript, "remove");
+            if (typeof remove === "function") Reflect.apply(remove, localScript, []);
+          }
+        } catch {}
+        releaseBinding("_paq", queueBinding, localQueueProxy === undefined ? localQueue : localQueueProxy);
+        releaseBinding("Matomo", matomoBinding, localMatomo);
+        releaseBinding("Piwik", piwikBinding, localPiwik);
+        releaseBinding("AnalyticsTracker", trackerBinding, localTrackerAlias);
+      };
+      try {
+        const getElementById = Reflect.get(documentValue, "getElementById");
+        const createElement = Reflect.get(documentValue, "createElement");
+        const head = Reflect.get(documentValue, "head");
+        if (typeof getElementById !== "function" || typeof createElement !== "function" ||
+            (typeof head !== "object" && typeof head !== "function") || head === null) return;
+        const occupied = Reflect.apply(getElementById, documentValue, [scriptId]);
+        if (occupied !== null && occupied !== undefined) return;
+        if (Reflect.getOwnPropertyDescriptor(root, "_paq") !== undefined ||
+            Reflect.getOwnPropertyDescriptor(root, "Matomo") !== undefined ||
+            Reflect.getOwnPropertyDescriptor(root, "Piwik") !== undefined ||
+            Reflect.getOwnPropertyDescriptor(root, "AnalyticsTracker") !== undefined) return;
+
+        const queue = [];
+        localQueue = queue;
+        ownedQueue = queue;
+        queueBinding = installBinding("_paq", queue, (value) => { localQueueProxy = value; });
+        matomoBinding = installBinding("Matomo", undefined, (value) => { localMatomo = value; });
+        piwikBinding = installBinding("Piwik", undefined, (value) => { localPiwik = value; });
+        trackerBinding = installBinding("AnalyticsTracker", undefined, (value) => { localTrackerAlias = value; });
+        if (queueBinding === undefined || matomoBinding === undefined || piwikBinding === undefined || trackerBinding === undefined ||
+            Reflect.get(root, "_paq") !== queue) {
+          cleanup();
+          return;
+        }
+        if (!queueBeforeReady(queue, ["setTrackerUrl", config.trackerUrl]) ||
+            !queueBeforeReady(queue, ["setSiteId", config.siteId])) {
+          cleanup();
+          return;
+        }
+        const script = Reflect.apply(createElement, documentValue, ["script"]);
+        localScript = script;
+        Reflect.set(script, "id", scriptId);
+        Reflect.set(script, "src", config.scriptSrc);
+        Reflect.set(script, "async", true);
+        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-cwl-astro-analytics", "matomo-v1"]);
+        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-site-id", config.siteId]);
+        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-tracker-url", config.trackerUrl]);
+        active = true;
+        Reflect.apply(Reflect.get(script, "addEventListener"), script, ["load", () => {
+          try {
+            const queueProxy = Reflect.get(root, "_paq");
+            const matomo = Reflect.get(root, "Matomo");
+            const piwik = Reflect.get(root, "Piwik");
+            const trackerAlias = Reflect.get(root, "AnalyticsTracker");
+            const queueKeys = (typeof queueProxy === "object" || typeof queueProxy === "function") && queueProxy !== null
+              ? Reflect.ownKeys(queueProxy)
+              : [];
+            if (!active || activeGeneration !== generation || queueProxy === localQueue ||
+                queueKeys.length !== 1 || queueKeys[0] !== "push" || typeof Reflect.get(queueProxy, "push") !== "function" ||
+                (typeof matomo !== "object" && typeof matomo !== "function") || matomo === null ||
+                piwik !== matomo || trackerAlias !== matomo || Reflect.get(matomo, "initialized") !== true ||
+                typeof Reflect.get(matomo, "getAsyncTrackers") !== "function" ||
+                localQueueProxy !== queueProxy || localMatomo !== matomo || localPiwik !== piwik || localTrackerAlias !== trackerAlias) {
+              cleanup();
+              return;
+            }
+            localQueueProxy = queueProxy;
+            localMatomo = matomo;
+            localPiwik = piwik;
+            localTrackerAlias = trackerAlias;
+            ownedQueue = queueProxy;
+            ownedMatomo = matomo;
+            vendorLoadProven = true;
+            vendorReady = true;
+            if (isPrerendering()) {
+              const addEventListener = Reflect.get(documentValue, "addEventListener");
+              if (typeof addEventListener !== "function") { cleanup(); return; }
+              Reflect.apply(addEventListener, documentValue, ["prerenderingchange", () => {
+                try { flushCompletedNavigation(generation); } catch { cleanup(); }
+              }, { once: true }]);
+            } else {
+              flushCompletedNavigation(generation);
+            }
+          } catch { cleanup(); }
+        }, { once: true }]);
+        Reflect.apply(Reflect.get(script, "addEventListener"), script, ["error", cleanup, { once: true }]);
+        Reflect.apply(Reflect.get(head, "appendChild"), head, [script]);
+      } catch { cleanup(); }
     };
     const coordinator = Object.freeze({ run, runtimeToken: config.runtimeToken });
     if (Reflect.defineProperty(documentValue, coordinatorKey, {

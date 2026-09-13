@@ -37,8 +37,9 @@ core Analytics for Astro integration and does not override Starlight components.
 The same [configuration reference](configuration.md) applies to Astro and
 Starlight.
 
-Milestone 2 loads Fathom, Plausible, or immediate-consent Google Analytics 4
+Milestone 2 loads Fathom, Plausible, immediate-consent Google Analytics 4, or Matomo
 and tracks Astro-lifecycle-owned pageviews in production output.
 
-The planned Matomo and Umami adapters will use this same Starlight wrapper after
-they are implemented and qualified. Alpha.7 does not accept either provider.
+Matomo uses this same wrapper and configuration contract. The planned Umami
+adapter will use it after implementation and qualification; alpha.8 does not
+accept Umami configuration.

@@ -9,6 +9,7 @@ import {
   createBootstrapScript,
   createFathomBootstrapScript,
   createGoogleAnalyticsBootstrapScript,
+  createMatomoBootstrapScript,
   createPlausibleBootstrapScript,
 } from "#runtime";
 
@@ -70,6 +71,17 @@ export default function astroAnalytics(
               runtimeToken: RUNTIME_TOKEN,
               scriptSrc: provider.scriptSrc ??
                 `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(provider.measurementId)}`,
+            }));
+          } else if (provider.name === "matomo") {
+            runtimes.push(createMatomoBootstrapScript({
+              consentMode: provider.consent?.mode,
+              eventCategory: provider.eventCategory,
+              events: config.events,
+              pageviews: provider.pageviews,
+              runtimeToken: RUNTIME_TOKEN,
+              scriptSrc: provider.scriptSrc ?? new URL("matomo.js", provider.trackerUrl).href,
+              siteId: provider.siteId,
+              trackerUrl: provider.trackerUrl,
             }));
           }
         }

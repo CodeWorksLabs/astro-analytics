@@ -12,6 +12,12 @@ const plausible = {
   scriptSrc: "https://example.com/js/script.js",
 };
 const fathom = { name: "fathom", siteId: "ABCDEFG" };
+const matomo = {
+  name: "matomo",
+  trackerUrl: "https://analytics.example.com/matomo.php",
+  siteId: "1",
+  eventCategory: "Astro",
+};
 
 function rejects(value: unknown, pattern: RegExp): void {
   assert.throws(() => normalizeConfig(value), pattern);
@@ -132,7 +138,7 @@ test("provider discriminator is required and fail-closed", () => {
 });
 
 test("every provider rejects unsupported pageview modes and extra fields", () => {
-  for (const provider of [google, plausible, fathom]) {
+  for (const provider of [google, plausible, fathom, matomo]) {
     rejects(
       { provider: { ...provider, pageviews: "bogus" } },
       /pageviews must be provider, astro, or none/,
@@ -306,6 +312,48 @@ test("Fathom validates required and optional branches", () => {
     { provider: { ...fathom, canonical: 1 } },
     /canonical must be a boolean/,
   );
+});
+
+test("Matomo validates tracker identity, event category, and consent", () => {
+  rejects({ provider: { name: "matomo" } }, /trackerUrl is required/);
+  rejects(
+    { provider: { ...matomo, trackerUrl: "https://analytics.example.com/" } },
+    /must end with \/matomo\.php/,
+  );
+  rejects(
+    { provider: { ...matomo, trackerUrl: "http://analytics.example.com/matomo.php" } },
+    /absolute HTTPS URL/,
+  );
+  rejects(
+    { provider: { ...matomo, siteId: "0" } },
+    /positive integer string/,
+  );
+  rejects(
+    { provider: { ...matomo, siteId: "site-one" } },
+    /positive integer string/,
+  );
+  rejects(
+    { provider: { ...matomo, eventCategory: " " } },
+    /eventCategory must not be empty/,
+  );
+  rejects(
+    { provider: { ...matomo, eventCategory: "x".repeat(129) } },
+    /at most 128 characters/,
+  );
+  rejects(
+    { provider: { ...matomo, trackerUrl: "https://analytics.example.com/matomo.php?x=1" } },
+    /contain no query or fragment/,
+  );
+  rejects(
+    { provider: { ...matomo, consent: { mode: "bogus" } } },
+    /must be immediate, deferred, or external/,
+  );
+  const config = normalizeConfig({ provider: matomo });
+  assert.deepEqual(config.provider, {
+    ...matomo,
+    scriptSrc: "https://analytics.example.com/matomo.js",
+    pageviews: "provider",
+  });
 });
 
 test("supported fields are copied only after validation", () => {

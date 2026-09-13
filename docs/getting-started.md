@@ -2,14 +2,14 @@
 
 ## Status
 
-Analytics for Astro is currently a private `0.1.0-alpha.7` candidate. There is
-no supported public npm installation yet.
+Analytics for Astro has a public source repository. The current working version
+is an unreleased `0.1.0-alpha.8` candidate; there is no supported npm installation yet.
 
-Milestone 2 implements Fathom, Plausible, and Google Analytics 4 pageviews and
+Milestone 2 implements Fathom, Plausible, Google Analytics 4, and Matomo pageviews and
 custom events. No queue or runtime consent activation API is included yet.
 
-Matomo and Umami are approved for the first stable provider set but remain
-planned. Alpha.7 does not accept their provider names or load their trackers.
+Umami is approved for the first stable provider set but remains planned.
+Alpha.8 does not accept its provider name or load its tracker.
 
 ## Declared requirements
 
@@ -24,13 +24,16 @@ been tested. The current exact consumer evidence is:
 | Consumer | Qualified versions |
 | --- | --- |
 | Stock Astro | Astro 7.3.2 on Node.js 22.22.2 |
-| Stock Starlight | Starlight 0.41.11 with Astro 7.3.2 on Node.js 22.22.2 |
 | Stock Starlight | Starlight 0.42.0 with Astro 7.3.2 on Node.js 22.22.2 |
+
+Starlight 0.41.11 with Astro 7.3.2 was qualified for the earlier alpha.3
+candidate on September 11, 2026. It remains eligible under the peer range, but
+that historical result is not current alpha.8 execution evidence.
 
 Astro 5.18.2 and 6.4.8 built successfully with the exact alpha.2 package used
 to establish this boundary, but their production dependency audits contain
 critical upstream Astro advisories. They and Starlight 0.35 through 0.40, whose
-peer requirements select those Astro majors, are excluded from the alpha.7
+peer requirements select those Astro majors, are excluded from the alpha.8
 eligibility range. Future versions matching the bounded peer ranges remain
 eligible, not automatically qualified compatibility claims.
 
@@ -118,6 +121,27 @@ After Fathom loads, the same call returns
 `{ ok: true, providers: { fathom: { ok: true } } }` when
 `fathom.trackEvent()` accepts it synchronously. See [Event client](events.md) for
 validation limits and all result reasons.
+
+## Configure Matomo
+
+```js
+analytics({
+  providers: [
+    {
+      name: "matomo",
+      trackerUrl: "https://analytics.example.com/matomo.php",
+      siteId: "1",
+      eventCategory: "Website",
+    },
+  ],
+  events: true,
+});
+```
+
+`trackerUrl` is the public tracking endpoint, not an administrative or API
+credential. The default tracker script is `matomo.js` beside that endpoint.
+Self-hosted installations with another public script location can set
+`scriptSrc` explicitly.
 
 ## Next reading
 

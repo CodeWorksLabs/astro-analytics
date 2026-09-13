@@ -7,9 +7,11 @@ import {
   createBootstrapScript,
   createFathomBootstrapScript,
   createGoogleAnalyticsBootstrapScript,
+  createMatomoBootstrapScript,
   createPlausibleBootstrapScript,
   FATHOM_SCRIPT_ID,
   GOOGLE_ANALYTICS_SCRIPT_ID,
+  MATOMO_SCRIPT_ID,
   PLAUSIBLE_SCRIPT_ID,
   RUNTIME_CLIENT_BRAND,
 } from "../src/runtime.ts";
@@ -138,6 +140,36 @@ function executeGoogleAnalyticsBootstrap(
   );
 }
 
+function executeMatomoBootstrap(
+  context: vm.Context,
+  overrides: Partial<Parameters<typeof createMatomoBootstrapScript>[0]> = {},
+): void {
+  const options = {
+    eventCategory: "Astro",
+    events: true,
+    pageviews: "provider" as const,
+    runtimeToken: "test-runtime-token",
+    scriptSrc: "https://analytics.example/matomo.js",
+    siteId: "1",
+    trackerUrl: "https://analytics.example/matomo.php",
+    ...overrides,
+  };
+  if (options.events) {
+    vm.runInNewContext(
+      createBootstrapScript({
+        events: true,
+        providers: ["matomo"],
+        runtimeToken: options.runtimeToken,
+      }),
+      context,
+      { timeout: 1_000 },
+    );
+  }
+  vm.runInNewContext(createMatomoBootstrapScript(options), context, {
+    timeout: 1_000,
+  });
+}
+
 function activatePlausible(
   context: vm.Context,
   script: Record<string, unknown>,
@@ -148,6 +180,30 @@ function activatePlausible(
   context.plausible = plausible;
   (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
   return calls;
+}
+
+function activateMatomo(
+  context: vm.Context,
+  script: Record<string, unknown>,
+): unknown[][] {
+  const commands = JSON.parse(JSON.stringify(context._paq)) as unknown[][];
+  const queueProxy = {
+    push(command: unknown[]) {
+      commands.push(command);
+    },
+  };
+  const matomo = {
+    initialized: true,
+    getAsyncTrackers() { return []; },
+  };
+  (context.document as Record<string, unknown>).currentScript = script;
+  context._paq = queueProxy;
+  context.Matomo = matomo;
+  context.Piwik = matomo;
+  context.AnalyticsTracker = matomo;
+  (context.document as Record<string, unknown>).currentScript = undefined;
+  (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+  return commands;
 }
 
 function createDocumentHarness(existingById?: Record<string, unknown> | Record<string, unknown>[]): {
@@ -248,6 +304,737 @@ test("Google Analytics injects without the optional event client", () => {
   assert.equal(injected.length, 1);
   assert.match(injected[0] ?? "", /google-analytics-v1/);
   assert.match(injected[0] ?? "", /G-TEST123/);
+});
+
+test("Matomo injects without the optional event client", () => {
+  const injected: string[] = [];
+  runSetup(
+    astroAnalytics({
+      provider: {
+        name: "matomo",
+        trackerUrl: "https://analytics.example/matomo.php",
+        siteId: "1",
+        eventCategory: "Astro",
+      },
+      events: false,
+    }),
+    "build",
+    injected,
+  );
+  assert.equal(injected.length, 1);
+  assert.match(injected[0] ?? "", /matomo-v1/);
+  assert.match(injected[0] ?? "", /https:\/\/analytics\.example\/matomo\.php/);
+});
+
+test("Matomo initializes its owned queue and sends Astro pageviews and mapped events", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, {
+      referrer: "https://search.example/",
+      title: "Landing",
+    }),
+    location: { href: "https://example.test/landing/" },
+  };
+  executeMatomoBootstrap(context);
+  assert.equal(harness.appended.length, 1);
+  const script = harness.appended[0] ?? {};
+  assert.equal(script.id, MATOMO_SCRIPT_ID);
+  assert.equal(script.src, "https://analytics.example/matomo.js");
+  assert.deepEqual(JSON.parse(JSON.stringify(context._paq)), [
+    ["setTrackerUrl", "https://analytics.example/matomo.php"],
+    ["setSiteId", "1"],
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
+    matomo: "adapter-not-loaded",
+  });
+  const commands = activateMatomo(context, script);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), { matomo: "ready" });
+  assert.deepEqual(JSON.parse(JSON.stringify(commands)), [
+    ["setTrackerUrl", "https://analytics.example/matomo.php"],
+    ["setSiteId", "1"],
+    ["setReferrerUrl", "https://search.example/"],
+    ["setCustomUrl", "https://example.test/landing/"],
+    ["setDocumentTitle", "Landing"],
+    ["trackPageView"],
+  ]);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(context.astroAnalytics.track("plain"))),
+    { ok: true, providers: { matomo: { ok: true } } },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(vm.runInNewContext('astroAnalytics.track("named", { _name: "Primary CTA" })', context))),
+    { ok: true, providers: { matomo: { ok: true } } },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(vm.runInNewContext('astroAnalytics.track("valued", { _value: 12.5 })', context))),
+    { ok: true, providers: { matomo: { ok: true } } },
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(vm.runInNewContext(
+      'astroAnalytics.track("signup", { _name: "Primary CTA", _value: 12.5, campaign: "fall" })',
+      context,
+    ))),
+    { ok: true, providers: { matomo: { ok: true } } },
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(commands.at(-1))), [
+    "trackEvent",
+    "Astro",
+    "signup",
+    "Primary CTA",
+    12.5,
+  ]);
+
+  context.location.href = "https://example.test/next/";
+  context.document.title = "Next";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.deepEqual(JSON.parse(JSON.stringify(commands.slice(-4))), [
+    ["setReferrerUrl", "https://example.test/landing/"],
+    ["setCustomUrl", "https://example.test/next/"],
+    ["setDocumentTitle", "Next"],
+    ["trackPageView"],
+  ]);
+});
+
+test("delayed Matomo readiness preserves the preceding virtual URL as referrer", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, {
+      referrer: "https://search.example/",
+      title: "Landing",
+    }),
+    location: { href: "https://example.test/landing/" },
+  };
+  executeMatomoBootstrap(context);
+  const script = harness.appended[0] ?? {};
+
+  context.location.href = "https://example.test/next/";
+  context.document.title = "Next";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  const commands = activateMatomo(context, script);
+  assert.deepEqual(JSON.parse(JSON.stringify(commands.slice(-4))), [
+    ["setReferrerUrl", "https://example.test/landing/"],
+    ["setCustomUrl", "https://example.test/next/"],
+    ["setDocumentTitle", "Next"],
+    ["trackPageView"],
+  ]);
+});
+
+test("multiple pre-ready Matomo navigations retain only the current journey edge", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, { title: "Landing" }),
+    location: { href: "https://example.test/landing/" },
+  };
+  executeMatomoBootstrap(context);
+  const script = harness.appended[0] ?? {};
+
+  context.location.href = "https://example.test/next/";
+  context.document.title = "Next";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  context.location.href = "https://example.test/final/";
+  context.document.title = "Final";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  const commands = activateMatomo(context, script);
+  assert.deepEqual(JSON.parse(JSON.stringify(commands.slice(-4))), [
+    ["setReferrerUrl", "https://example.test/next/"],
+    ["setCustomUrl", "https://example.test/final/"],
+    ["setDocumentTitle", "Final"],
+    ["trackPageView"],
+  ]);
+  assert.equal(commands.some((command) => command.includes("https://example.test/landing/")), false);
+});
+
+test("Matomo readiness during an in-flight navigation preserves the last completed edge", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, {
+      referrer: "https://search.example/",
+      title: "A",
+    }),
+    location: { href: "https://example.test/a/" },
+  };
+  executeMatomoBootstrap(context);
+  const script = harness.appended[0] ?? {};
+  context.location.href = "https://example.test/b/";
+  context.document.title = "B";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  context.location.href = "https://example.test/c/";
+  context.document.title = "C";
+
+  const commands = activateMatomo(context, script);
+  assert.equal(commands.some((command) => command[0] === "trackPageView"), false);
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.deepEqual(JSON.parse(JSON.stringify(commands.slice(-4))), [
+    ["setReferrerUrl", "https://example.test/b/"],
+    ["setCustomUrl", "https://example.test/c/"],
+    ["setDocumentTitle", "C"],
+    ["trackPageView"],
+  ]);
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.equal(commands.filter((command) => command[0] === "trackPageView").length, 1);
+});
+
+test("matching Matomo bootstraps before load remain pending and coalesce to the current route", () => {
+  for (const pageviews of ["provider", "astro", "none"] as const) {
+    for (const events of [true, false]) {
+      const harness = createDocumentHarness();
+      const context: vm.Context = {
+        document: Object.assign(harness.document, { title: "A" }),
+        location: { href: "https://example.test/a/" },
+      };
+      executeMatomoBootstrap(context, { events, pageviews });
+      const script = harness.appended[0] ?? {};
+      const startupLength = (context._paq as unknown[]).length;
+
+      executeMatomoBootstrap(context, { events, pageviews });
+      assert.equal(harness.appended.length, 1);
+      assert.equal((context._paq as unknown[]).length, startupLength);
+      if (events) {
+        assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
+          matomo: "adapter-not-loaded",
+        });
+        assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.track("before-load"))), {
+          ok: false,
+          providers: { matomo: { ok: false, reason: "adapter-not-loaded" } },
+          reason: "adapter-not-loaded",
+        });
+        assert.equal((context._paq as unknown[]).length, startupLength);
+      }
+
+      context.location.href = "https://example.test/b/";
+      context.document.title = "B";
+      harness.documentListeners.get("astro:page-load")?.[0]?.();
+      executeMatomoBootstrap(context, { events, pageviews });
+      context.location.href = "https://example.test/c/";
+      context.document.title = "C";
+      const commands = activateMatomo(context, script);
+      assert.equal(commands.some((command) => command[0] === "trackPageView"), false);
+      harness.documentListeners.get("astro:page-load")?.[0]?.();
+
+      if (pageviews === "none") {
+        assert.equal(commands.some((command) => command[0] === "trackPageView"), false);
+        if (events) {
+          assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.track("after-load"))), {
+            ok: true,
+            providers: { matomo: { ok: true } },
+          });
+          assert.deepEqual(JSON.parse(JSON.stringify(commands.slice(-4))), [
+            ["setReferrerUrl", "https://example.test/b/"],
+            ["setCustomUrl", "https://example.test/c/"],
+            ["setDocumentTitle", "C"],
+            ["trackEvent", "Astro", "after-load"],
+          ]);
+        }
+      } else {
+        assert.deepEqual(JSON.parse(JSON.stringify(commands.slice(-4))), [
+          ["setReferrerUrl", "https://example.test/b/"],
+          ["setCustomUrl", "https://example.test/c/"],
+          ["setDocumentTitle", "C"],
+          ["trackPageView"],
+        ]);
+        assert.equal(commands.filter((command) => command[0] === "trackPageView").length, 1);
+      }
+    }
+  }
+});
+
+test("pre-load matching reentry remains pending through error and a clean retry", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, { title: "A" }),
+    location: { href: "https://example.test/a/" },
+  };
+  executeMatomoBootstrap(context);
+  const failedScript = harness.appended[0] ?? {};
+  executeMatomoBootstrap(context);
+  (failedScript.listeners as Map<string, Array<() => void>>).get("error")?.[0]?.();
+  assert.equal(context._paq, undefined);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.track("after-error"))), {
+    ok: false,
+    providers: { matomo: { ok: false, reason: "adapter-not-loaded" } },
+    reason: "adapter-not-loaded",
+  });
+
+  context.location.href = "https://example.test/b/";
+  context.document.title = "B";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  executeMatomoBootstrap(context);
+  const commands = activateMatomo(context, harness.appended[1] ?? {});
+  assert.deepEqual(JSON.parse(JSON.stringify(commands.slice(-4))), [
+    ["setReferrerUrl", "https://example.test/a/"],
+    ["setCustomUrl", "https://example.test/b/"],
+    ["setDocumentTitle", "B"],
+    ["trackPageView"],
+  ]);
+  assert.equal(JSON.stringify(commands).includes("before-load"), false);
+  assert.equal(JSON.stringify(commands).includes("after-error"), false);
+});
+
+test("Matomo retries failed navigation-observer installation without duplicate listeners", () => {
+  for (const pageviews of ["provider", "astro", "none"] as const) {
+    for (const unavailable of ["missing", "throwing"] as const) {
+      for (const scenario of [
+        { destination: "c", missedRoutes: ["b"] },
+        { destination: "d", missedRoutes: ["b", "c"] },
+        { destination: "a", missedRoutes: ["b"] },
+      ]) {
+        const { destination, missedRoutes } = scenario;
+        const harness = createDocumentHarness();
+        const originalAddEventListener = harness.document.addEventListener;
+        harness.document.addEventListener = unavailable === "missing"
+          ? undefined
+          : () => { throw new Error("listener unavailable"); };
+        const context: vm.Context = {
+          document: Object.assign(harness.document, {
+            referrer: "https://search.example/result/",
+            title: "A",
+          }),
+          location: { href: "https://example.test/a/" },
+        };
+
+        executeMatomoBootstrap(context, { pageviews });
+        assert.equal(harness.appended.length, 0);
+        assert.equal(harness.documentListeners.has("astro:page-load"), false);
+        for (const route of missedRoutes) {
+          context.location.href = `https://example.test/${route}/`;
+          context.document.title = route.toUpperCase();
+        }
+
+        harness.document.addEventListener = originalAddEventListener;
+        executeMatomoBootstrap(context, { pageviews });
+        executeMatomoBootstrap(context, { pageviews });
+        assert.equal(harness.appended.length, 0);
+        assert.equal(harness.documentListeners.get("astro:page-load")?.length, 1);
+        assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
+          matomo: "adapter-not-loaded",
+        });
+
+        context.location.href = `https://example.test/${destination}/`;
+        context.document.title = destination.toUpperCase();
+        harness.documentListeners.get("astro:page-load")?.[0]?.();
+        assert.equal(harness.appended.length, 1);
+        const commands = activateMatomo(context, harness.appended[0] ?? {});
+
+        if (pageviews === "none") {
+          assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.track(`event-on-${destination}`))), {
+            ok: true,
+            providers: { matomo: { ok: true } },
+          });
+          assert.deepEqual(JSON.parse(JSON.stringify(commands.slice(-4))), [
+            ["setReferrerUrl", ""],
+            ["setCustomUrl", `https://example.test/${destination}/`],
+            ["setDocumentTitle", destination.toUpperCase()],
+            ["trackEvent", "Astro", `event-on-${destination}`],
+          ]);
+          assert.equal(commands.some((command) => command[0] === "trackPageView"), false);
+        } else {
+          assert.deepEqual(JSON.parse(JSON.stringify(commands.slice(-4))), [
+            ["setReferrerUrl", ""],
+            ["setCustomUrl", `https://example.test/${destination}/`],
+            ["setDocumentTitle", destination.toUpperCase()],
+            ["trackPageView"],
+          ]);
+          assert.equal(commands.filter((command) => command[0] === "trackPageView").length, 1);
+        }
+
+        context.location.href = "https://example.test/known-next/";
+        context.document.title = "Known next";
+        harness.documentListeners.get("astro:page-load")?.[0]?.();
+        if (pageviews === "none") context.astroAnalytics.track("event-on-known-next");
+        assert.deepEqual(JSON.parse(JSON.stringify(commands.slice(-4))), [
+          ["setReferrerUrl", `https://example.test/${destination}/`],
+          ["setCustomUrl", "https://example.test/known-next/"],
+          ["setDocumentTitle", "Known next"],
+          [pageviews === "none" ? "trackEvent" : "trackPageView", ...(pageviews === "none" ? ["Astro", "event-on-known-next"] : [])],
+        ]);
+      }
+    }
+  }
+});
+
+test("Matomo validates reserved event fields and fails closed for pending consent", () => {
+  const pendingHarness = createDocumentHarness();
+  const pendingContext: vm.Context = {
+    document: pendingHarness.document,
+    location: { href: "https://example.test/" },
+  };
+  executeMatomoBootstrap(pendingContext, { consentMode: "external" });
+  assert.equal(pendingHarness.appended.length, 0);
+  assert.equal(pendingContext._paq, undefined);
+  assert.deepEqual(JSON.parse(JSON.stringify(pendingContext.astroAnalytics.status())), {
+    matomo: "consent-pending",
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(pendingContext.astroAnalytics.track("signup"))), {
+    ok: false,
+    providers: { matomo: { ok: false, reason: "consent-pending" } },
+    reason: "consent-pending",
+  });
+
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/" },
+  };
+  executeMatomoBootstrap(context);
+  const script = harness.appended[0] ?? {};
+  activateMatomo(context, script);
+  assert.deepEqual(JSON.parse(JSON.stringify(vm.runInNewContext('astroAnalytics.track("signup", { _name: "" })', context))), {
+    ok: false,
+    providers: { matomo: { ok: false, reason: "invalid-event" } },
+    reason: "invalid-event",
+  });
+});
+
+test("Matomo rejects occupied state, cleans up failures, and retries once", () => {
+  const occupiedHarness = createDocumentHarness();
+  const occupiedContext: vm.Context = {
+    _paq: [],
+    document: occupiedHarness.document,
+    location: { href: "https://example.test/" },
+  };
+  executeMatomoBootstrap(occupiedContext);
+  assert.equal(occupiedHarness.appended.length, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(occupiedContext.astroAnalytics.status())), {
+    matomo: "adapter-not-loaded",
+  });
+
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/" },
+  };
+  executeMatomoBootstrap(context);
+  const failedScript = harness.appended[0] ?? {};
+  (failedScript.listeners as Map<string, Array<() => void>>).get("error")?.[0]?.();
+  assert.equal(context._paq, undefined);
+  assert.equal(failedScript.isConnected, false);
+
+  executeMatomoBootstrap(context);
+  assert.equal(harness.appended.length, 2);
+  const retryScript = harness.appended[1] ?? {};
+  activateMatomo(context, retryScript);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
+    matomo: "ready",
+  });
+  executeMatomoBootstrap(context);
+  assert.equal(harness.appended.length, 2);
+});
+
+test("Matomo retry restores same-page and completed-navigation pageviews", () => {
+  const sameHarness = createDocumentHarness();
+  const sameContext: vm.Context = {
+    document: Object.assign(sameHarness.document, {
+      referrer: "https://search.example/",
+      title: "A",
+    }),
+    location: { href: "https://example.test/a/" },
+  };
+  executeMatomoBootstrap(sameContext);
+  (sameHarness.appended[0]?.listeners as Map<string, Array<() => void>>).get("error")?.[0]?.();
+  executeMatomoBootstrap(sameContext);
+  const sameCommands = activateMatomo(sameContext, sameHarness.appended[1] ?? {});
+  assert.equal(sameCommands.filter((command) => command[0] === "trackPageView").length, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(sameCommands.slice(-4))), [
+    ["setReferrerUrl", "https://search.example/"],
+    ["setCustomUrl", "https://example.test/a/"],
+    ["setDocumentTitle", "A"],
+    ["trackPageView"],
+  ]);
+
+  const movedHarness = createDocumentHarness();
+  const movedContext: vm.Context = {
+    document: Object.assign(movedHarness.document, { title: "A" }),
+    location: { href: "https://example.test/a/" },
+  };
+  executeMatomoBootstrap(movedContext);
+  movedContext.location.href = "https://example.test/b/";
+  movedContext.document.title = "B";
+  movedHarness.documentListeners.get("astro:page-load")?.[0]?.();
+  (movedHarness.appended[0]?.listeners as Map<string, Array<() => void>>).get("error")?.[0]?.();
+  executeMatomoBootstrap(movedContext);
+  const movedCommands = activateMatomo(movedContext, movedHarness.appended[1] ?? {});
+  assert.deepEqual(JSON.parse(JSON.stringify(movedCommands.slice(-4))), [
+    ["setReferrerUrl", "https://example.test/a/"],
+    ["setCustomUrl", "https://example.test/b/"],
+    ["setDocumentTitle", "B"],
+    ["trackPageView"],
+  ]);
+});
+
+test("Matomo retry waits for an in-flight destination without replaying history", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, { title: "A" }),
+    location: { href: "https://example.test/a/" },
+  };
+  executeMatomoBootstrap(context);
+  context.location.href = "https://example.test/b/";
+  context.document.title = "B";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  (harness.appended[0]?.listeners as Map<string, Array<() => void>>).get("error")?.[0]?.();
+  executeMatomoBootstrap(context);
+  context.location.href = "https://example.test/c/";
+  context.document.title = "C";
+  const commands = activateMatomo(context, harness.appended[1] ?? {});
+  assert.equal(commands.some((command) => command[0] === "trackPageView"), false);
+  harness.documentListeners.get("astro:page-load")?.at(-1)?.();
+  assert.deepEqual(JSON.parse(JSON.stringify(commands.slice(-4))), [
+    ["setReferrerUrl", "https://example.test/b/"],
+    ["setCustomUrl", "https://example.test/c/"],
+    ["setDocumentTitle", "C"],
+    ["trackPageView"],
+  ]);
+});
+
+test("Matomo observes completed routes between failure and retry in every pageview mode", () => {
+  for (const pageviews of ["provider", "astro", "none"] as const) {
+    const harness = createDocumentHarness();
+    const context: vm.Context = {
+      document: Object.assign(harness.document, { title: "A" }),
+      location: { href: "https://example.test/a/" },
+    };
+    executeMatomoBootstrap(context, { pageviews });
+    (harness.appended[0]?.listeners as Map<string, Array<() => void>>).get("error")?.[0]?.();
+    context.location.href = "https://example.test/b/";
+    context.document.title = "B";
+    harness.documentListeners.get("astro:page-load")?.[0]?.();
+    context.location.href = "https://example.test/c/";
+    context.document.title = "C";
+    harness.documentListeners.get("astro:page-load")?.[0]?.();
+
+    executeMatomoBootstrap(context, { pageviews });
+    const commands = activateMatomo(context, harness.appended[1] ?? {});
+    if (pageviews === "none") {
+      context.astroAnalytics.track("event-on-c");
+      assert.equal(commands.some((command) => command[0] === "trackPageView"), false);
+      assert.deepEqual(JSON.parse(JSON.stringify(commands.slice(-4))), [
+        ["setReferrerUrl", "https://example.test/b/"],
+        ["setCustomUrl", "https://example.test/c/"],
+        ["setDocumentTitle", "C"],
+        ["trackEvent", "Astro", "event-on-c"],
+      ]);
+    } else {
+      assert.deepEqual(JSON.parse(JSON.stringify(commands.slice(-4))), [
+        ["setReferrerUrl", "https://example.test/b/"],
+        ["setCustomUrl", "https://example.test/c/"],
+        ["setDocumentTitle", "C"],
+        ["trackPageView"],
+      ]);
+      assert.equal(commands.filter((command) => command[0] === "trackPageView").length, 1);
+    }
+  }
+});
+
+test("Matomo observes navigation after initial setup failure and waits out retry navigation", () => {
+  const harness = createDocumentHarness();
+  const originalCreateElement = harness.document.createElement;
+  harness.document.createElement = () => { throw new Error("setup failed"); };
+  const context: vm.Context = {
+    document: Object.assign(harness.document, { title: "A" }),
+    location: { href: "https://example.test/a/" },
+  };
+  executeMatomoBootstrap(context);
+  context.location.href = "https://example.test/b/";
+  context.document.title = "B";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  harness.document.createElement = originalCreateElement;
+  executeMatomoBootstrap(context);
+  context.location.href = "https://example.test/c/";
+  context.document.title = "C";
+  const commands = activateMatomo(context, harness.appended[0] ?? {});
+  assert.equal(commands.some((command) => command[0] === "trackPageView"), false);
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.deepEqual(JSON.parse(JSON.stringify(commands.slice(-4))), [
+    ["setReferrerUrl", "https://example.test/b/"],
+    ["setCustomUrl", "https://example.test/c/"],
+    ["setDocumentTitle", "C"],
+    ["trackPageView"],
+  ]);
+});
+
+test("Matomo cleans up partial vendor initialization before retrying", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/" },
+  };
+  executeMatomoBootstrap(context);
+  const failedScript = harness.appended[0] ?? {};
+  context.document.currentScript = failedScript;
+  context._paq = { push() {} };
+  const partialMatomo = { initialized: false, getAsyncTrackers() { return []; } };
+  context.Matomo = partialMatomo;
+  context.Piwik = partialMatomo;
+  context.AnalyticsTracker = partialMatomo;
+  context.document.currentScript = undefined;
+  (failedScript.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+
+  assert.equal(context._paq, undefined);
+  assert.equal(context.Matomo, undefined);
+  assert.equal(context.Piwik, undefined);
+  assert.equal(context.AnalyticsTracker, undefined);
+  assert.equal(failedScript.isConnected, false);
+
+  executeMatomoBootstrap(context);
+  assert.equal(harness.appended.length, 2);
+  activateMatomo(context, harness.appended[1] ?? {});
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
+    matomo: "ready",
+  });
+});
+
+test("Matomo preserves unrelated globals that replace its startup state", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/" },
+  };
+  executeMatomoBootstrap(context);
+  const script = harness.appended[0] ?? {};
+  const foreignQueue = { push() {}, unexpected: true };
+  const foreignMatomo = { initialized: false };
+  const foreignPiwik = { partial: true };
+  const foreignTracker = { partial: true };
+  context._paq = foreignQueue;
+  context.Matomo = foreignMatomo;
+  context.Piwik = foreignPiwik;
+  context.AnalyticsTracker = foreignTracker;
+  (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+
+  assert.equal(context._paq, foreignQueue);
+  assert.equal(context.Matomo, foreignMatomo);
+  assert.equal(context.Piwik, foreignPiwik);
+  assert.equal(context.AnalyticsTracker, foreignTracker);
+  assert.equal(script.isConnected, false);
+});
+
+test("Matomo preserves structurally conforming foreign state and stale callbacks cannot remove it", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/" },
+  };
+  executeMatomoBootstrap(context);
+  const script = harness.appended[0] ?? {};
+  const foreignQueue = { push() {} };
+  const foreignMatomo = { initialized: true, getAsyncTrackers() { return []; } };
+  context._paq = foreignQueue;
+  context.Matomo = foreignMatomo;
+  context.Piwik = foreignMatomo;
+  context.AnalyticsTracker = foreignMatomo;
+  (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+
+  assert.equal(context._paq, foreignQueue);
+  assert.equal(context.Matomo, foreignMatomo);
+  assert.equal(context.Piwik, foreignMatomo);
+  assert.equal(context.AnalyticsTracker, foreignMatomo);
+
+  (script.listeners as Map<string, Array<() => void>>).get("error")?.[0]?.();
+  assert.equal(context._paq, foreignQueue);
+  assert.equal(context.Matomo, foreignMatomo);
+});
+
+test("Matomo pageview none keeps mapped events without lifecycle sends", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, { title: "No pageviews" }),
+    location: { href: "https://example.test/" },
+  };
+  executeMatomoBootstrap(context, { pageviews: "none" });
+  const script = harness.appended[0] ?? {};
+  const commands = activateMatomo(context, script);
+  assert.equal(harness.documentListeners.has("astro:page-load"), true);
+  assert.equal(commands.some((command) => command[0] === "trackPageView"), false);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(context.astroAnalytics.track("signup"))),
+    { ok: true, providers: { matomo: { ok: true } } },
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(commands.at(-1))), [
+    "trackEvent",
+    "Astro",
+    "signup",
+  ]);
+});
+
+test("Matomo pageview none keeps event context on the last completed navigation", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, { title: "A" }),
+    location: { href: "https://example.test/a/" },
+  };
+  executeMatomoBootstrap(context, { pageviews: "none" });
+  const commands = activateMatomo(context, harness.appended[0] ?? {});
+  context.location.href = "https://example.test/b/";
+  context.document.title = "B";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  context.astroAnalytics.track("event-on-b");
+  context.location.href = "https://example.test/c/";
+  context.document.title = "C";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  context.astroAnalytics.track("event-on-c");
+
+  assert.equal(commands.some((command) => command[0] === "trackPageView"), false);
+  assert.deepEqual(JSON.parse(JSON.stringify(commands.slice(-8))), [
+    ["setReferrerUrl", "https://example.test/a/"],
+    ["setCustomUrl", "https://example.test/b/"],
+    ["setDocumentTitle", "B"],
+    ["trackEvent", "Astro", "event-on-b"],
+    ["setReferrerUrl", "https://example.test/b/"],
+    ["setCustomUrl", "https://example.test/c/"],
+    ["setDocumentTitle", "C"],
+    ["trackEvent", "Astro", "event-on-c"],
+  ]);
+});
+
+test("Matomo readiness fails closed when its retained command proxy becomes unusable", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/" },
+  };
+  executeMatomoBootstrap(context);
+  activateMatomo(context, harness.appended[0] ?? {});
+  context._paq.push = undefined;
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
+    matomo: "adapter-not-loaded",
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.track("event"))), {
+    ok: false,
+    providers: { matomo: { ok: false, reason: "adapter-not-loaded" } },
+    reason: "adapter-not-loaded",
+  });
+});
+
+test("Matomo requalifies its exact restored proxy after a transient command exception", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, { title: "A" }),
+    location: { href: "https://example.test/a/" },
+  };
+  executeMatomoBootstrap(context);
+  const commands = activateMatomo(context, harness.appended[0] ?? {});
+  const queue = context._paq as { push: (command: unknown[]) => void };
+  const originalPush = queue.push;
+  queue.push = () => { throw new Error("transient"); };
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.track("fails-once"))), {
+    ok: false,
+    providers: { matomo: { ok: false, reason: "adapter-not-loaded" } },
+    reason: "adapter-not-loaded",
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
+    matomo: "adapter-not-loaded",
+  });
+
+  queue.push = originalPush;
+  executeMatomoBootstrap(context);
+  assert.equal(harness.appended.length, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), { matomo: "ready" });
+  assert.equal(commands.filter((command) => command[0] === "trackPageView").length, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.track("recovered"))), {
+    ok: true,
+    providers: { matomo: { ok: true } },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(commands.at(-1))), ["trackEvent", "Astro", "recovered"]);
 });
 
 test("Google Analytics initializes consent before config and sends Astro-owned pageviews and events", () => {
@@ -507,6 +1294,12 @@ test("multi-provider runtime exposes independent adapter outcomes", () => {
     providers: [
       { name: "fathom", siteId: "ABCDEFG" },
       { name: "plausible", scriptSrc: "https://plausible.example/script.js" },
+      {
+        name: "matomo",
+        trackerUrl: "https://analytics.example/matomo.php",
+        siteId: "1",
+        eventCategory: "Sandbox",
+      },
     ],
     events: true,
   });
@@ -525,10 +1318,11 @@ test("multi-provider runtime exposes independent adapter outcomes", () => {
     location: { href: "https://example.test/analytics/" },
   };
   vm.runInNewContext(injected[0]?.slice("page:".length) ?? "", context);
-  assert.deepEqual(Array.from(context.astroAnalytics.providers), ["fathom", "plausible"]);
+  assert.deepEqual(Array.from(context.astroAnalytics.providers), ["fathom", "plausible", "matomo"]);
   assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
     fathom: "adapter-not-loaded",
     plausible: "adapter-not-loaded",
+    matomo: "adapter-not-loaded",
   });
   assert.equal(context.astroAnalytics.track("journey").reason, "adapter-not-loaded");
 
@@ -539,6 +1333,7 @@ test("multi-provider runtime exposes independent adapter outcomes", () => {
       providers: {
         fathom: { ok: false, reason: "invalid-event" },
         plausible: { ok: false, reason: "invalid-event" },
+        matomo: { ok: false, reason: "invalid-event" },
       },
       reason: "invalid-event",
     },
@@ -550,6 +1345,7 @@ test("multi-provider runtime exposes independent adapter outcomes", () => {
   assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
     fathom: "ready",
     plausible: "adapter-not-loaded",
+    matomo: "adapter-not-loaded",
   });
   assert.deepEqual(
     JSON.parse(JSON.stringify(context.astroAnalytics.track("journey"))),
@@ -558,6 +1354,7 @@ test("multi-provider runtime exposes independent adapter outcomes", () => {
       providers: {
         fathom: { ok: true },
         plausible: { ok: false, reason: "adapter-not-loaded" },
+        matomo: { ok: false, reason: "adapter-not-loaded" },
       },
     },
   );
@@ -568,19 +1365,70 @@ test("multi-provider runtime exposes independent adapter outcomes", () => {
   assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
     fathom: "ready",
     plausible: "ready",
+    matomo: "adapter-not-loaded",
   });
   assert.deepEqual(
     JSON.parse(JSON.stringify(context.astroAnalytics.track("both-ready"))),
     {
-      ok: true,
+      ok: false,
       providers: {
         fathom: { ok: true },
         plausible: { ok: true },
+        matomo: { ok: false, reason: "adapter-not-loaded" },
       },
     },
   );
   assert.deepEqual(calls, ["journey", "both-ready"]);
   assert.deepEqual(plausibleCalls.at(-1), ["both-ready"]);
+
+  const matomoScript = harness.appended[2] ?? {};
+  const matomoCommands = activateMatomo(context, matomoScript);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
+    fathom: "ready",
+    plausible: "ready",
+    matomo: "ready",
+  });
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(context.astroAnalytics.track("all-ready"))),
+    {
+      ok: true,
+      providers: {
+        fathom: { ok: true },
+        plausible: { ok: true },
+        matomo: { ok: true },
+      },
+    },
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(matomoCommands.at(-1))), [
+    "trackEvent",
+    "Sandbox",
+    "all-ready",
+  ]);
+  const matomoPush = context._paq.push;
+  context._paq.push = () => { throw new Error("transient"); };
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.track("matomo-broken"))), {
+    ok: false,
+    providers: {
+      fathom: { ok: true },
+      plausible: { ok: true },
+      matomo: { ok: false, reason: "adapter-not-loaded" },
+    },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
+    fathom: "ready",
+    plausible: "ready",
+    matomo: "adapter-not-loaded",
+  });
+  context._paq.push = matomoPush;
+  vm.runInNewContext(injected[0]?.slice("page:".length) ?? "", context);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.track("all-recovered"))), {
+    ok: true,
+    providers: {
+      fathom: { ok: true },
+      plausible: { ok: true },
+      matomo: { ok: true },
+    },
+  });
 });
 
 test("Plausible initializes manual Astro pageviews and forwards event properties", () => {

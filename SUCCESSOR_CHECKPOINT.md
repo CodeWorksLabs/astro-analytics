@@ -1,6 +1,6 @@
 # Analytics for Astro Handoff Checkpoint
 
-Updated: 2026-09-12
+Updated: 2026-09-13
 
 ## Current State
 
@@ -17,12 +17,14 @@ GitHub Releases, and production-site integration remain separately controlled.
 
 The source repository is public under the MIT license. The npm package remains
 unpublished and retains `"private": true` as a publication safeguard until an
-authorized package-release change. The current intended Milestone 2 working
-candidate version is `0.1.0-alpha.7`; it has not been tagged, released, or
-published. Alpha.7 contains the live-qualified Fathom, Plausible,
-and Google Analytics 4 adapters, provider readiness and independent result
-reporting, and the corrected GA4 `arguments`-object queue contract, while
-retaining the reviewed Astro/Starlight support boundary.
+authorized package-release change. The current intended Milestone 2 candidate
+version is `0.1.0-alpha.8`. It contains the live-qualified Fathom, Plausible,
+and Google Analytics 4 adapters plus the clean static-gated Matomo adapter,
+provider readiness and independent result reporting, and the corrected GA4
+`arguments`-object queue contract, while retaining the reviewed
+Astro/Starlight support boundary. The exact R5 Matomo candidate passed all four
+separate Code Reviewer gates with 0 P0/P1/P2/P3 findings. Live Matomo sandbox
+qualification is the next gate; the package remains unpublished to npm.
 Its canonical public remote is
 `https://github.com/CodeWorksLabs/astro-analytics`.
 The public-facing product title is now **Analytics for Astro**. The npm package
@@ -1606,3 +1608,457 @@ Recycle Bin metadata were permanently deleted and verified absent.
 Astro Analytics may resume ordinary development against public `main`. Future
 GitHub release, permission, Actions-architecture, or Cloudflare operations stay
 outside the development lane unless assigned as an exact bounded action.
+
+## Matomo alpha.8 working candidate — 2026-09-12
+
+Ordinary product development resumed on public `main` from clean correction
+baseline `61d26fe2f3cbabb4e529d60d57b661584a2e3449`. The current working tree is
+an uncommitted `0.1.0-alpha.8` Matomo candidate; no tag, GitHub Release, npm
+publication, sandbox integration, provider administration, or deployment has
+occurred.
+
+The candidate adds strict `matomo` configuration for an exact public HTTPS
+`matomo.php` tracker endpoint, positive integer site ID, explicit event
+category, optional HTTPS script URL, pageview mode, and existing build-time
+consent mode. It creates the standard startup `_paq` queue and adopts Matomo's
+validated replacement command proxy, rejects occupied globals and script IDs,
+configures the tracker endpoint and site ID, waits for script readiness,
+and sends initial and client-navigation pageviews from Astro's post-swap
+lifecycle using current URL/title and the preceding virtual URL as referrer.
+Failure cleanup removes the package script, listener, and owned queue so a
+matching bootstrap can retry. Deferred and external consent remain fail-closed
+without a runtime activation API.
+
+Matomo custom events use the reviewed explicit mapping required by its
+category/action API: provider `eventCategory` is category, package event name is
+action, optional `_name` is Matomo's event name, and optional finite numeric
+`_value` is its event value. Other validated properties remain available to
+simultaneous providers but are not misrepresented as Matomo fields.
+
+Canonical package documentation is being updated continuously with the code,
+including Astro/Starlight configuration, self-hosted endpoint guidance,
+runtime/consent behavior, event mapping, API inventory, versioning, and
+changelog.
+
+Four visible `codex review --uncommitted` passes were completed. The first three
+found and drove corrections for: rejection of Matomo's real post-load `_paq`
+proxy; blocking globals left by partial initialization failure; and incorrect
+virtual-referrer attribution when one or more Astro navigations precede delayed
+Matomo readiness. Regression coverage was added for each. The fourth full review
+reported no actionable regression. Strict typecheck and all 106 source tests pass;
+`git diff --check` reports no whitespace errors (only the repository's expected
+LF-to-CRLF warnings).
+
+The actual alpha.8 package artifact was built and inspected at
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-alpha8-6aa1ff141c35420c9b50caa32eca2e03\codeworkslabs-astro-analytics-0.1.0-alpha.8.tgz`.
+It contains 19 intended entries, is 38,201 bytes compressed, and has SHA-256
+`45EF9985EF92D4A460F375EA1E5663C2DE63DAD062C05467E1D98EB8594D1487`.
+That tarball was installed as version `0.1.0-alpha.8` into isolated copies of the
+CodeWorksLabs stock Astro and stock Starlight consumers. Both production builds
+passed, both generated Matomo runtime output, both dependency audits reported
+zero vulnerabilities, and both Wrangler deployment dry-runs passed. The real
+sandbox repositories and deployments were not mutated.
+
+Separate Code Reviewer review, documentation publication, and live self-hosted
+Matomo qualification remain outstanding. No commit, push, tag, GitHub Release,
+npm publication, canonical sandbox integration, provider administration, or
+deployment has occurred in this Matomo phase.
+
+## Matomo alpha.8 Code Reviewer block and remediation — 2026-09-12
+
+The separate doctrine-complete Code Reviewer gate reviewed the exact first
+alpha.8 artifact and both isolated consumers under case
+`AFA-MATOMO-ALPHA8-20260912`. It issued `BLOCK` with 0 P0, 3 P1, 3 P2, and no
+evidence blocker. The prior artifact with SHA-256
+`45EF9985EF92D4A460F375EA1E5663C2DE63DAD062C05467E1D98EB8594D1487` is therefore
+historical blocked evidence and must not be presented as the candidate.
+
+All six findings were handled in one bounded correction batch:
+
+- A8-01: `pageviews: "none"` now retains an Astro page-load listener and applies
+  each completed route's URL, title, and preceding virtual URL to Matomo before
+  events without sending `trackPageView`.
+- A8-02: completed navigation history is distinct from a pending pageview, so
+  Matomo readiness during an in-flight route waits for completion and preserves
+  the immediately preceding completed URL as referrer.
+- A8-03: completed route state survives script cleanup; matching retries restore
+  same-page or navigated pageviews exactly once and wait out in-flight routes.
+- A8-04: cleanup claims only structurally recognizable Matomo partial state;
+  nonconforming globals installed by another script are preserved.
+- A8-05: runtime status now requires the retained Matomo proxy and aliases plus
+  a callable `push`; a failed proxy call revokes readiness without affecting
+  simultaneous providers.
+- A8-06: current alpha.8 qualification now names only Astro 7.3.2 and Starlight
+  0.42.0/Astro 7.3.2 on Node 22.22.2. Starlight 0.41.11 is explicitly labeled
+  historical alpha.3 evidence from September 11, 2026 while remaining eligible
+  under the peer range.
+
+Strict typecheck and all 112 tests pass after correction. A fresh visible
+`codex review --uncommitted` inspected the remediation and reported no actionable
+regression. The replacement artifact is:
+
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-alpha8-remediation-e75a6e7919b64d6a8160bd4039669b76\codeworkslabs-astro-analytics-0.1.0-alpha.8.tgz`
+
+It contains 19 intended entries, is 39,316 bytes compressed / 184,287 bytes
+unpacked, has SHA-256
+`9EB1C8A9EB8A4A6B547F1E39B01683877775518A7297E3C925713E436BC66AB2`, npm SHA-1
+`40e0e6b04a5b0001d249c8154ac0c1b34740a302`, and integrity
+`sha512-p0nWPVXcFC2YfJ34xkq+AOzNN2wMI5oMMxnkW1IOTC5IkhWMlOcJWjZPpZSeJaM1YCzZPvrESoHW88vQtTX5AQ==`.
+
+Fresh isolated replacement consumers are under
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-consumers-alpha8-remediation-1fcbcfa81ab84f7a9fd9841a47e547ca`.
+Both install alpha.8 exactly, report zero dependency vulnerabilities, complete
+production builds, emit the replacement Matomo runtime, and pass Wrangler
+deployment dry-runs without uploading:
+
+- stock Astro 7.3.2: lock SHA-256
+  `03C8AB1FA9A5079D3159B7C66463ADD2FB80F42694C557E4DCCB27A6384F9DF8`;
+  emitted `dist/_astro/page.Cs5dBhw6.js`, SHA-256
+  `439985A3E98BDCF5AE8BB26F26B2DCF1F700E60DCEA26C6E6C728EF1C0D09F01`;
+- stock Starlight 0.42.0/Astro 7.3.2: lock SHA-256
+  `93B0EA53295171E0A5792C3A181DFD4234EC5E3C932F2C782766B406A742C68B`;
+  emitted `dist/_astro/page.CcZz2qLD.js`, SHA-256
+  `AD1334D437A79077B95CB18EFF468081221BF83974B85528C7CD91E7A8629940`.
+
+The corrected tree and replacement artifact/consumers still require a new exact
+freeze and Code Reviewer re-review. Live Matomo qualification and documentation
+publication remain later gates. No commit, push, tag, GitHub Release, npm
+publication, canonical sandbox mutation, provider administration, or deployment
+occurred in this correction batch.
+
+## Matomo alpha.8 R1 block and second remediation — 2026-09-13
+
+Code Reviewer re-reviewed the first remediation under case
+`AFA-MATOMO-ALPHA8-20260912-R1` and issued `BLOCK` with 0 P0, 1 P1, 2 P2,
+and no evidence blocker. The R1 artifact with SHA-256
+`9EB1C8A9EB8A4A6B547F1E39B01683877775518A7297E3C925713E436BC66AB2` and its
+isolated consumers are historical blocked evidence and must not be presented as
+the current candidate.
+
+All three R1 findings were corrected together:
+
+- A8R-01: the coordinator now retains one full-document Astro navigation
+  observer for its lifetime, including inactive failure-to-retry intervals, so
+  a retry restores the latest completed route and its virtual referrer.
+- A8R-02: cleanup ownership is based on assignments made while the package's
+  own script is `document.currentScript`, rather than structural similarity.
+  Structurally conforming foreign Matomo globals and later foreign replacements
+  are preserved, including after stale load/error callbacks.
+- A8R-03: an invocation exception revokes readiness, while a later matching
+  bootstrap can requalify the exact retained package-owned proxy and aliases,
+  restore route context, and continue without a duplicate pageview.
+
+Targeted integration coverage now includes failure followed by multiple
+completed routes and retry in `provider`, `astro`, and `none` modes; initial
+failure followed by navigation and retry during the next in-flight route;
+preservation of structurally conforming foreign Matomo state; exact-proxy
+requalification after a transient throwing `push`; and multi-provider recovery
+while Fathom and Plausible remain operational.
+
+Strict typecheck and all 116 tests pass. A new visible full
+`codex review --uncommitted` inspected this second remediation and reported no
+actionable correctness regression. A fresh R2 artifact and new isolated
+consumer evidence must be produced before the next Code Reviewer freeze. No
+commit, push, tag, GitHub Release, npm publication, canonical sandbox mutation,
+provider administration, or deployment occurred in this remediation batch.
+
+### Matomo alpha.8 R2 artifact and consumer evidence — 2026-09-13
+
+The fresh R2 artifact is:
+
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-alpha8-r2-210152653a5a44ce8f1c70bb35c095e7\codeworkslabs-astro-analytics-0.1.0-alpha.8.tgz`
+
+It contains 19 intended entries, is 39,776 bytes compressed / 185,491 bytes
+unpacked, has SHA-256
+`7013BBF251DCEC8DDD4E642344F366E1950D8B790398D3228F87966C2CAF5653`, npm SHA-1
+`afdb689f897316a555403831cdd9ebf94d8ac322`, and integrity
+`sha512-0/uXCQYtQYr68NGhJ+hqZ3fHoAIZ6o3NQ+fZBfLkhRXMTOojumrHv6+KCFSVbD7yqx2axQq6m+SIYUePDA8eZQ==`.
+
+Fresh isolated consumers are under
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-consumers-alpha8-r2-66d6f2079a854ea88f1b41a59bee9a88`.
+Both install version `0.1.0-alpha.8` from that exact tarball, report zero
+dependency vulnerabilities, complete production builds, emit the R2 Matomo
+runtime, and pass Wrangler deployment dry-runs without uploading:
+
+- stock Astro 7.3.2: lock SHA-256
+  `67F048A2374A072B7982D54D0DF0C56989F94F52237273B6E2BA59FED5C338B4`;
+  emitted `dist/_astro/page.C1LDJMvr.js`, SHA-256
+  `D1C9202EB8AE1FE9ADCF50D23C285A7E10D4DEBA404F585888A3B2BFBBE79C24`;
+- stock Starlight 0.42.0/Astro 7.3.2: lock SHA-256
+  `192B56406FEE055200C6BE96D788AF9CAAB922E0D34D51F4A5223B9284C103C4`;
+  emitted `dist/_astro/page.SI6BSblR.js`, SHA-256
+  `C413F6CE6125724F4F7CBE1128304B76AADE7CD32ABF10AA16A8CE6F8FEC63F8`.
+
+The R2 consumer exercise initially used numeric placeholder site IDs and the
+package correctly rejected them before build. The isolated fixtures were
+corrected to digit strings (`'1'` and `'2'`) as required by the public contract;
+no product or canonical sandbox file changed as a result.
+
+### R2 Code Reviewer freeze
+
+Implementation is stopped for the R2 Code Reviewer gate. The exact frozen
+source identity is public `main` HEAD
+`61d26fe2f3cbabb4e529d60d57b661584a2e3449`, HEAD tree
+`a3f3267ddf826ffd69f77cadf146a1b7aef8837e`, product diff SHA-1
+`f0c3dba8e89ef408fe8417cc1753e7f3d810e7bd` (binary Git diff excluding this
+checkpoint), and package-lock SHA-256
+`906D86A31A8B00E473C724DB0C83F333CA21636AA27BEAF0687B79A8F77A3919`.
+There are 20 modified tracked files, zero staged files, and zero untracked
+files. The exact R2 artifact and isolated consumer identities are recorded
+above. No implementation changes are queued while this freeze is active.
+
+## Matomo alpha.8 R2 block and third remediation — 2026-09-13
+
+Code Reviewer completed the four declared Static Review gates under case
+`AFA-MATOMO-ALPHA8-20260912-R2` and issued `BLOCK` with 0 P0, 1 P1, 1 P2,
+and no material evidence blocker. The R2 artifact with SHA-256
+`7013BBF251DCEC8DDD4E642344F366E1950D8B790398D3228F87966C2CAF5653` and its
+isolated consumers are historical blocked evidence and must not be presented as
+the current candidate. The reviewer independently confirmed that all three R1
+findings now pass replay.
+
+Both R2 findings were corrected together:
+
+- A8R2-01: matching reentry can requalify only a provider identity that already
+  passed the package's genuine script-load validation. The never-validated
+  startup array remains not loaded, cannot accept events, and continues
+  coalescing completed navigation until real readiness.
+- A8R2-02: Matomo setup now requires successful singleton Astro navigation
+  observer registration. Missing or throwing registration keeps the adapter
+  fail-closed, and matching reentry safely retries after restoration without
+  adding duplicate listeners.
+
+New closure coverage exercises repeated matching bootstrap before load across
+`provider`, `astro`, and `none` pageview modes with events enabled and disabled;
+completed and in-flight navigation; eventual error and eventual successful
+load; truthful status and event rejection; current-route-only readiness; and
+retention of post-load transient-proxy recovery. Observer coverage exercises
+both missing and throwing registration APIs across all pageview modes, then
+restoration, matching retry, singleton registration, in-flight completion, and
+correct URL/title/virtual-referrer behavior.
+
+Strict typecheck and all 119 tests pass. A fresh visible full
+`codex review --uncommitted` also exercised the adapter with a real Matomo script
+in headless Chrome, found the source, event behavior, documentation, and tests
+internally consistent, and reported no actionable regression. A fresh R3
+artifact and isolated consumers must be produced before another Code Reviewer
+freeze. No commit, push, tag, GitHub Release, npm publication, canonical sandbox
+mutation, provider administration, documentation publication, or deployment
+occurred in this remediation batch.
+
+### Matomo alpha.8 R3 artifact and consumer evidence — 2026-09-13
+
+The fresh R3 artifact is:
+
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-alpha8-r3-3bbdd2a511e448fbba8ec27aca89fb32\codeworkslabs-astro-analytics-0.1.0-alpha.8.tgz`
+
+It contains 19 intended entries, is 40,072 bytes compressed / 186,782 bytes
+unpacked, has SHA-256
+`C9AB9C4283E057925930498FC9338653A50C971AE343A8B7E61DF32336E04A20`, npm SHA-1
+`e68a96566e261e6e83af3785b93d637af38e0dbb`, and integrity
+`sha512-9uZLoZhKStuKOB/kF2Ob90mpW+KCONwGRp5nlZyOoOxaqqBUb5AG2QVX2hmkNUBJbNXsrmMDr+gEjcdXgwnt/g==`.
+
+Fresh isolated R3 consumers are under
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-consumers-alpha8-r3-9a94c5dee3954931838bba758caca3f0`.
+Both install version `0.1.0-alpha.8` from that exact tarball, report zero
+dependency vulnerabilities, complete production builds, emit the R3 Matomo
+runtime, and pass Wrangler deployment dry-runs without uploading:
+
+- stock Astro 7.3.2: lock SHA-256
+  `8F496F7B4E0AC7F103630F2C745B1160F164E0582501436C5936AA0E4E002DCA`;
+  emitted `dist/_astro/page.DHo9sC_9.js`, SHA-256
+  `16666DCC61B50B2B2938B5409D13DAC3D4FA3772BB1F00194D36380EAF923B3F`;
+- stock Starlight 0.42.0/Astro 7.3.2: lock SHA-256
+  `6F8FAA84EA906754E85FBD5EFD4F580CEFA27529C11ADFB82C71AF22BDAEC7EE`;
+  emitted `dist/_astro/page.B1Y3Sw-z.js`, SHA-256
+  `A1C1823DBDF373E11B9B66AFED5F7A903CB1918815DA0232E68335E96ABD51F5`.
+
+### R3 Code Reviewer freeze
+
+Implementation is stopped for the R3 Code Reviewer gate. The exact frozen
+source identity is public `main` HEAD
+`61d26fe2f3cbabb4e529d60d57b661584a2e3449`, HEAD tree
+`a3f3267ddf826ffd69f77cadf146a1b7aef8837e`, product diff SHA-1
+`3c19ebb3f64b27c2ee9fb45f3e6a1fb15be6814e` (binary Git diff excluding this
+checkpoint), and package-lock SHA-256
+`906D86A31A8B00E473C724DB0C83F333CA21636AA27BEAF0687B79A8F77A3919`.
+There are 20 modified tracked files, zero staged files, and zero untracked
+files. The exact R3 artifact and isolated consumer identities are recorded
+above. No implementation changes are queued while this freeze is active.
+
+## Matomo alpha.8 R3 residual and fourth remediation — 2026-09-13
+
+Code Reviewer completed all four declared R3 Static Review gates with `PASS
+WITH P2/P3 FINDINGS`: 0 P0, 0 P1, 1 P2, 0 P3, and no material evidence blocker.
+The exact R3 artifact and consumers passed the gate but retain one known P2 and
+therefore are historical superseded evidence, not the current candidate. The
+product authority did not accept or defer that residual risk.
+
+A8R3-01 showed that one or more Astro routes could complete while initial
+navigation-observer registration was unavailable. Restored reentry installed
+the observer, but the adapter could not know whether the current URL was already
+complete or in flight. The correction now records an observation gap, remains
+not loaded after listener recovery, and waits for the next real
+`astro:page-load` completion before starting Matomo. The first supported route
+after the gap receives an explicit unknown-referrer state, which suppresses both
+virtual-edge inference and fallback to a stale external `document.referrer`.
+This remains true when navigation returned to the last known URL.
+
+Closure coverage exercises missing and throwing listener APIs; one and multiple
+missed routes; an in-flight destination after recovery; return to the original
+URL; all three pageview modes; a nonempty external document referrer; truthful
+not-loaded status until supported completion; singleton observer installation;
+correct current URL/title; no invented `setReferrerUrl`; and exact pageview or
+events-only behavior.
+
+Strict typecheck and all 119 tests pass. A fresh visible full
+`codex review --uncommitted` verified the correction and the real Matomo runtime
+and reported no actionable correctness regression. A fresh R4 artifact and
+isolated consumers must be produced before another Code Reviewer freeze. No
+commit, push, tag, GitHub Release, npm publication, canonical sandbox mutation,
+provider administration, documentation publication, or deployment occurred in
+this remediation batch.
+
+### Matomo alpha.8 R4 artifact, consumers, and review freeze — 2026-09-13
+
+The fresh R4 artifact is:
+
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-alpha8-r4-a01b84572d5c40b7acd53cbce14d615c\codeworkslabs-astro-analytics-0.1.0-alpha.8.tgz`
+
+It contains 19 intended entries, is 40,413 bytes compressed / 188,164 bytes
+unpacked, has SHA-256
+`4BE33B40706CBAF3C0A3419ABB37BBADAD6163124C0551500FE232F66F8C52F2`, npm SHA-1
+`e4737bbd2b209c29a619f4c633e77bb5b74f74f6`, and integrity
+`sha512-iSRmVmt5vYVeHWPVl27XGAkWH4rikvOfh1kfCrbiWlC+iOuUlPJljouFw24aki0AUY8fFaN6F0TE36TaED+UcA==`.
+
+Fresh isolated R4 consumers are under
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-consumers-alpha8-r4-45edfe92944a4f06b60c2e145c64c090`.
+Both install exact version `0.1.0-alpha.8`, report zero dependency
+vulnerabilities, complete production builds, emit the R4 Matomo runtime, and
+pass Wrangler deployment dry-runs without uploading:
+
+- stock Astro 7.3.2: lock SHA-256
+  `4D3A2EC6035CD8DE9CE800FBD446D33BE51F43533E9FE34FCD78B89A620EE37F`;
+  emitted `dist/_astro/page.CO8aatp3.js`, SHA-256
+  `C5351B37E54A87087449557CD207E50F16681FC4107BE850BD25141F81101953`;
+- stock Starlight 0.42.0/Astro 7.3.2: lock SHA-256
+  `F87D57839D35ED345481BBB5113450A524AB1B6C0B0F57B2E24C1EE25330D076`;
+  emitted `dist/_astro/page.DoRVe-Oj.js`, SHA-256
+  `37F135D40E8666C7102EDA8364A954B9186A1D745442D658A6A669544FE90410`.
+
+Implementation is stopped for the R4 Code Reviewer gate. The exact frozen
+source identity is public `main` HEAD
+`61d26fe2f3cbabb4e529d60d57b661584a2e3449`, HEAD tree
+`a3f3267ddf826ffd69f77cadf146a1b7aef8837e`, product diff SHA-1
+`2466b217bb6275d96309b8fc6b27bf55e7f3c9e6` (binary Git diff excluding this
+checkpoint), package-lock SHA-256
+`906D86A31A8B00E473C724DB0C83F333CA21636AA27BEAF0687B79A8F77A3919`, runtime
+SHA-256 `F84664EA164625C33DC05E46E664D8C93AA279D04DDE99950D8EF0EBFDD1BFEE`, and
+integration-test SHA-256
+`7108A172928510F8E37DE9D9DBECF03778A5B6D9D274BDA58859460FD75661AE`.
+There are 20 modified tracked files, zero staged files, and zero untracked
+files. No implementation changes are queued while this freeze is active.
+
+## Matomo alpha.8 R4 residual and fifth remediation — 2026-09-13
+
+Code Reviewer completed all four R4 Static Review gates with `PASS WITH P2/P3
+FINDINGS`: 0 P0, 0 P1, 1 P2, 0 P3, and no material evidence blocker. R4 is
+historical superseded evidence; the product authority did not accept or defer
+the P2.
+
+A8R4-01 established that omitting a `setReferrerUrl` command did not clear
+Matomo's own default referrer. With a nonempty original `document.referrer`, the
+real vendor still transmitted that stale external value on the first supported
+route after an observation gap. The correction preserves the explicit unknown
+sentinel through `sendPageview` and maps it to `setReferrerUrl("")` at the vendor
+boundary. This clears Matomo's internal referrer state without inventing a
+virtual predecessor. Subsequent observed navigation again uses the exact known
+preceding URL.
+
+Closure tests cover missing and throwing observer registration, one/multiple
+missed routes, in-flight recovery, return to the original URL, all pageview
+modes, a nonempty external referrer, explicit empty vendor referrer on the first
+supported route, and the correct known virtual referrer on the next route.
+
+Strict typecheck and all 119 tests pass. A fresh visible full
+`codex review --uncommitted` inspected Matomo's real `setReferrerUrl`
+implementation, confirmed the vendor-boundary effect, and reported no actionable
+regression. A fresh R5 artifact and isolated consumers must be produced before
+another Code Reviewer freeze. No commit, push, tag, GitHub Release, npm
+publication, canonical sandbox mutation, provider administration,
+documentation publication, or deployment occurred in this remediation batch.
+
+### Matomo alpha.8 R5 artifact, consumers, and review freeze — 2026-09-13
+
+The fresh R5 artifact is:
+
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-alpha8-r5-ea81aa8abb6849e0be675bb54511bf6b\codeworkslabs-astro-analytics-0.1.0-alpha.8.tgz`
+
+It contains 19 intended entries, is 40,534 bytes compressed / 188,595 bytes
+unpacked, has SHA-256
+`FE5C5FD1F8DFECDD2BF0C233663FE88507A5C9744DD6FE8C98E2D42AD71E0717`, npm SHA-1
+`3cfa5968b07ae3787f9827cf83ceb64c4c43bfff`, and integrity
+`sha512-KImKM3WLhfwGWSFubaMShL7f8LsDjX0y+PPm8nCnGjecG92hDqruL21b1oqxnwYIjbiJbaH+43QOlInl1iE63g==`.
+
+Fresh isolated R5 consumers are under
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-consumers-alpha8-r5-158a343df3df461682fe94bf78c9785e`.
+Both install exact version `0.1.0-alpha.8`, report zero dependency
+vulnerabilities, complete production builds, emit the R5 Matomo runtime, and
+pass Wrangler deployment dry-runs without uploading:
+
+- stock Astro 7.3.2: lock SHA-256
+  `E3AE90C07109E00AC634BFD5F87A4EB6D2755B62907967CC7AF85A2B27E25DD1`;
+  emitted `dist/_astro/page.BcUtzoZk.js`, SHA-256
+  `F3AEC450DFB5E7FCC5910AC5ADB2E207D9D75A91F3D0C67357A9E9FED5DC4334`;
+- stock Starlight 0.42.0/Astro 7.3.2: lock SHA-256
+  `424D0CE4C013CFAA6D55156BCF665A8F9A691CE377E51D25274CB345659E545D`;
+  emitted `dist/_astro/page.Be4poJKJ.js`, SHA-256
+  `A310795E8E868CBC5AA6DA8306EAD40659B649AE69C8E1E5BE72F7C7A980698A`.
+
+Implementation is stopped for the R5 Code Reviewer gate. The exact frozen
+source identity is public `main` HEAD
+`61d26fe2f3cbabb4e529d60d57b661584a2e3449`, HEAD tree
+`a3f3267ddf826ffd69f77cadf146a1b7aef8837e`, product diff SHA-1
+`7e909610d05ba0361b7172b6d28474697ee5b737` (binary Git diff excluding this
+checkpoint), package-lock SHA-256
+`906D86A31A8B00E473C724DB0C83F333CA21636AA27BEAF0687B79A8F77A3919`, runtime
+SHA-256 `632AA7DDF9FAAE03CA5DCCA07470BE5F729C76633C0B575CE70C8D29CED593AA`, and
+integration-test SHA-256
+`653D5633C75AF1899605127B24BA91B0D04EF1967FFF5E6E759B105953CD9BE4`.
+There are 20 modified tracked files, zero staged files, and zero untracked
+files. The R4 freeze ended solely because A8R4-01 was corrected; no
+implementation changes are queued while this R5 freeze is active.
+
+No commit, push, tag, GitHub Release, npm publication, canonical sandbox
+mutation, provider administration, documentation publication, or deployment
+occurred while producing or validating R5.
+
+## Matomo alpha.8 R5 Code Reviewer disposition — 2026-09-13
+
+Code Reviewer completed the doctrine-complete independent review under case
+`AFA-MATOMO-ALPHA8-20260912-R5`. All four declared Static Review gates issued
+`INTERNAL CODE REVIEW PASS`. The complete finding census is 0 P0, 0 P1, 0 P2,
+and 0 P3, with no accepted or deferred risks and no material unresolved evidence
+blocker.
+
+The reviewer independently closed A8R4-01 on the exact frozen R5 candidate. It
+replayed the package runtime and both emitted consumer bundles with the frozen
+real Matomo script and confirmed that `setReferrerUrl("")` clears the stale
+external referrer on the first supported post-gap request, while the next
+observed route sends its exact known preceding URL. It also independently ran
+all 119 tests, strict TypeScript checking, malformed-configuration and fault
+injection probes, package/member/installed-consumer reconciliation, installed
+API compiler checks, documentation-link checks, and source/vendor/consumer
+runtime replays. All passed.
+
+The reviewer reverified the frozen identities recorded above without source,
+Git, service, provider, sandbox, or checkpoint mutation. Its closing source and
+artifact identities match the R5 freeze exactly. The R5 Static Review gate is
+therefore complete and the implementation freeze ends only for this disposition
+record. Any candidate change requires a new identity, evidence set, and
+applicable review.
+
+This is a clean static candidate disposition, not live Matomo qualification or
+release authorization. No commit, push, tag, GitHub Release, npm publication,
+canonical sandbox mutation, provider administration, documentation publication,
+or deployment was authorized or performed by the review.

@@ -149,6 +149,7 @@ function normalizeProviderNames(value: unknown): readonly ProviderName[] | undef
   const supported = new Set<ProviderName>([
     "fathom",
     "google-analytics",
+    "matomo",
     "plausible",
   ]);
   const names: ProviderName[] = [];

@@ -53,10 +53,21 @@ export interface FathomProvider {
   canonical?: boolean;
 }
 
+export interface MatomoProvider {
+  name: "matomo";
+  trackerUrl: string;
+  siteId: string;
+  eventCategory: string;
+  scriptSrc?: string;
+  pageviews?: PageviewMode;
+  consent?: { mode: ConsentMode };
+}
+
 export type AnalyticsProvider =
   | GoogleAnalyticsProvider
   | PlausibleProvider
-  | FathomProvider;
+  | FathomProvider
+  | MatomoProvider;
 
 export type NormalizedAnalyticsProvider = AnalyticsProvider & {
   pageviews: PageviewMode;
@@ -386,6 +397,62 @@ function normalizeFathom(provider: UnknownRecord): FathomProvider & {
   return normalized;
 }
 
+function normalizeMatomo(provider: UnknownRecord): MatomoProvider & {
+  pageviews: PageviewMode;
+} {
+  assertExactKeys(
+    provider,
+    ["name", "trackerUrl", "siteId", "eventCategory", "scriptSrc", "pageviews", "consent"],
+    "provider",
+  );
+  for (const key of ["trackerUrl", "siteId", "eventCategory"] as const) {
+    if (!hasOwn(provider, key)) {
+      throw new TypeError(`provider.${key} is required.`);
+    }
+  }
+  const trackerUrl = validateHttpsUrl(
+    provider.trackerUrl,
+    "provider.trackerUrl",
+  );
+  const tracker = new URL(trackerUrl);
+  if (tracker.search || tracker.hash || !tracker.pathname.endsWith("/matomo.php")) {
+    throw new TypeError("provider.trackerUrl must end with /matomo.php and contain no query or fragment.");
+  }
+  const siteId = requireNonEmpty(provider.siteId, "provider.siteId");
+  if (!/^[1-9]\d*$/.test(siteId) || !Number.isSafeInteger(Number(siteId))) {
+    throw new TypeError("provider.siteId must be a positive integer string.");
+  }
+  const eventCategory = requireNonEmpty(
+    provider.eventCategory,
+    "provider.eventCategory",
+  );
+  if (eventCategory.length > 128) {
+    throw new TypeError("provider.eventCategory must be at most 128 characters.");
+  }
+  const normalized: MatomoProvider & { pageviews: PageviewMode } = {
+    name: "matomo",
+    trackerUrl,
+    siteId,
+    eventCategory,
+    scriptSrc: validateHttpsUrl(
+      hasOwn(provider, "scriptSrc")
+        ? provider.scriptSrc
+        : new URL("matomo.js", trackerUrl).href,
+      "provider.scriptSrc",
+    ),
+    pageviews: hasOwn(provider, "pageviews")
+      ? normalizePageviews(provider.pageviews, "provider.pageviews")
+      : "provider",
+  };
+  if (hasOwn(provider, "consent")) {
+    normalized.consent = normalizeSimpleConsent(
+      provider.consent,
+      "provider.consent",
+    );
+  }
+  return normalized;
+}
+
 function normalizeProvider(value: unknown): NormalizedAnalyticsProvider {
   const provider = expectObject(value, "provider");
   if (!hasOwn(provider, "name") || typeof provider.name !== "string") {
@@ -398,6 +465,8 @@ function normalizeProvider(value: unknown): NormalizedAnalyticsProvider {
       return normalizePlausible(provider);
     case "fathom":
       return normalizeFathom(provider);
+    case "matomo":
+      return normalizeMatomo(provider);
     default:
       throw new TypeError(`provider.name ${JSON.stringify(provider.name)} is not supported.`);
   }

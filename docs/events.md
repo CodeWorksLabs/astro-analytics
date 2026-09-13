@@ -28,7 +28,7 @@ clients, adapter results, or supported hostile-object cases. It validates and
 copies the event before invoking `window.astroAnalytics.track()`.
 
 Milestone 2 connects the client to Fathom's `trackEvent()`, Plausible's
-`plausible()`, and Google Analytics 4's `gtag()` APIs. Calls made before an
+`plausible()`, Google Analytics 4's `gtag()`, and Matomo's `_paq` APIs. Calls made before an
 integration's script load is verified return `adapter-not-loaded`; they are not
 queued or retried. Unrelated preexisting vendor globals are not treated as
 package readiness.
@@ -128,8 +128,17 @@ bag returns a Plausible `invalid-event` result without calling the vendor API.
 Google Analytics 4 receives up to 25 validated event parameters. Caller-supplied
 `send_to` is rejected because the adapter owns routing to its Measurement ID.
 
-Matomo and Umami event mapping is not implemented in alpha.7. No result entry
-for either provider can appear until its provider type and adapter are added in
-a later reviewed candidate.
+Matomo receives `trackEvent(eventCategory, action, name?, value?)`. The provider's
+configured `eventCategory` supplies the category and the package event name
+supplies the action. Optional `_name` and finite numeric `_value` properties
+supply Matomo's third and fourth arguments. Other validated properties are not
+sent to Matomo, allowing another configured provider to consume them without
+inventing Matomo semantics. An empty or non-string `_name` produces Matomo's
+per-provider `invalid-event` result. When Matomo uses `pageviews: "none"`, its
+Astro page-load listener still applies the URL, title, and preceding virtual URL
+of each completed route before later events; it does not send `trackPageView`.
+
+Umami event mapping is not implemented in alpha.8. No Umami result entry can
+appear until its provider type and adapter are added in a later reviewed candidate.
 
 Do not depend on the brand or property descriptor as a security boundary.
