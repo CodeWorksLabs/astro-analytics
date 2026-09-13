@@ -2,6 +2,36 @@
 
 Updated: 2026-09-13
 
+## Active doctrine-complete alpha.11 cycle — 2026-09-13
+
+Phil commissioned the complete Code Review Doctrine workflow after clarifying
+that earlier focused reviews are not sufficient for the RC gate. The working
+review is `AFA-RC-READINESS-20260913-W1`. Its opening product identity was clean
+`main`/`origin/main` commit `50a5135c51e1f4a1a7e46875f37d525f1c58d641`;
+the two sandbox and docs repositories were likewise clean and synchronized.
+
+The working review found one cross-provider P1 correctness family: Fathom,
+Plausible, GA4, and Matomo used URL equality as completed-navigation identity,
+unlike the corrected Umami adapter, and could suppress a genuine consecutive
+`astro:page-load` completion at the same URL. It also found that Plausible and
+GA4 could report ready after failing to install their Astro navigation observer,
+while Fathom's recovery could infer a route across that observation gap. The
+current uncommitted alpha.11 correction gives all five adapters completion
+identity, preserves GA4/Matomo same-URL referrer and title context, and keeps
+Fathom/Plausible/GA4 closed until observation is installed. Regression coverage
+has increased from 140 to 143 tests.
+
+Baseline before mutation passed 140/140 tests, strict typecheck, a deterministic
+alpha.10 dry-run pack, and zero-vulnerability production audits in the product,
+both sandboxes, and docs repository. The correction is still in progress: run
+the complete product gate, inspect the diff, commit/push the product repository's
+own `main`, build the exact alpha.11 artifact, update and verify both self-contained
+sandbox repositories and synchronized docs, commit/push each repository's own
+`main`, then record the new multi-repository freeze. Only then launch the
+identical doctrine-complete internal and external Code Reviewer reviews
+simultaneously. Do not deploy, publish to npm, create a GitHub Release, or move
+an existing tag during this cycle.
+
 ## Active alpha.10 correction — 2026-09-13
 
 The immutable public `v0.1.0-alpha.9` tag remains at product commit

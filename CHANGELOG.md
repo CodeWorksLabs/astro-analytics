@@ -7,6 +7,20 @@ release claim.
 
 ## Unreleased
 
+## 0.1.0-alpha.11 - Candidate
+
+- Track each completed Astro lifecycle as a distinct pageview across Fathom,
+  Plausible, Google Analytics 4, Matomo, and Umami, including consecutive
+  completions at the same URL while retaining pre-readiness coalescing.
+- Preserve the immediately preceding completed URL as GA4 and Matomo's virtual
+  referrer for same-URL completions and refresh Matomo's event-only title and
+  route context for every completion.
+- Keep Fathom, Plausible, and GA4 readiness closed when their Astro page-load
+  observer cannot be installed, and recover without inventing a completion
+  across the observation gap.
+- Retain a pageview rejected synchronously by a vendor boundary for bounded
+  matching-bootstrap retry instead of silently losing that completion.
+
 ## 0.1.0-alpha.10 - Candidate
 
 - Once Umami is ready, track each completed Astro ClientRouter lifecycle as a

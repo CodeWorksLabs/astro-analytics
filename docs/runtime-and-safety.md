@@ -86,13 +86,13 @@ attribute set, descriptor shape, and self-reference on another script cannot add
 that script to the retained generation. Identical integration instances call the
 coordinator, which validates its closure-held script against the current DOM and
 configuration before reuse. The inspection state
-carries the last successfully sent browser-navigation URL as non-executable
+carries the last successfully sent completion identity as non-executable
 deduplication state, separately from the canonical payload sent to Fathom;
 the replaceable document copy and immutable script copy are never authoritative
 for callbacks, readiness, or activity. Matching reentry restores the authentic
 closure-held state and retains its
 existing listener and callback generation. This preserves both its original
-browser URL guard and its latest completed pending post-swap navigation across
+completion guard and its latest completed pending post-swap navigation across
 reentry while the vendor is loading or the document is prerendering. Verified
 readiness remains closure-backed in that retained generation; an unrelated
 ambient Fathom API and substituted public readiness fields cannot establish or
@@ -107,10 +107,11 @@ document state; a late callback from a removed, superseded script is ignored.
 Runtime state is published and read back before a new event client is exposed, so
 a failed publication cannot leave an untracked client outside later revocation.
 If the vendor script fails, or reports `load` without exposing Fathom's
-`trackPageview()` API, its generation is deactivated, pending page URLs are
+`trackPageview()` API, its generation is deactivated, pending pageviews are
 cleared, its Astro page-load listener is removed, and the script is disconnected
 before retry is permitted. Deactivation uses private closure state, so freezing
-the inspection-only lifecycle object cannot prevent cleanup.
+the inspection-only lifecycle object cannot prevent cleanup. A pageview that
+throws synchronously remains pending for bounded matching-bootstrap retry.
 
 Consent mode is a build-time choice and is immutable after an immediate runtime
 has begun loading Fathom in a document. A later conflicting pending-consent
@@ -152,22 +153,28 @@ site-specific script. It rejects an occupied `plausible` global rather than
 adopting unrelated state. Script load marks the adapter ready; script failure or
 partial setup revokes its listener and owned queue. Pageviews are sent through
 `plausible("pageview", { url })` only after Astro's lifecycle identifies the
-current destination. Custom events are sent synchronously through
+current destination. Every ready observed completion is sent even when its URL
+matches the preceding completion; pre-ready completions coalesce to the latest.
+A missing or throwing page-load observer keeps readiness closed. Custom events are sent synchronously through
 `plausible(name, { props })`; success means the vendor call accepted the event,
 not that Plausible's server confirmed delivery. Property bags over Plausible's
 30-property limit fail before the vendor call, and numeric or boolean values are
-serialized to strings for Plausible's custom-property contract.
+serialized to strings for Plausible's custom-property contract. A pageview that
+throws synchronously remains pending for bounded matching-bootstrap retry.
 
 The Google Analytics 4 adapter refuses pre-existing `gtag` or `dataLayer`
 globals instead of adopting unrelated state. It emits configured Consent Mode
 defaults before the one `config` command, forces `send_page_view: false`, and
 marks the adapter ready only after its owned gtag.js script loads while both
 owned globals remain intact. Astro lifecycle pageviews include current location
-and title plus the preceding virtual URL as referrer. Custom events preserve up
+and title plus the preceding virtual URL as referrer. Consecutive same-URL
+completions remain distinct and use that URL as the exact virtual edge. A
+missing or throwing page-load observer keeps readiness closed. Custom events preserve up
 to 25 validated primitive parameters and add the configured Measurement ID as
 `send_to`; callers cannot override that routing field. A synchronous success
 means the command entered the owned Google queue, not that Google's server has
-confirmed delivery. Sites must disable Enhanced Measurement's history-based
+confirmed delivery. A synchronously rejected pageview remains pending for
+bounded matching-bootstrap retry. Sites must disable Enhanced Measurement's history-based
 page changes to prevent duplicate SPA pageviews.
 
 The Matomo adapter refuses a pre-existing `_paq` global or occupied package
@@ -176,7 +183,8 @@ queue, adopts Matomo's validated replacement command proxy, configures the exact
 tracker endpoint and site ID, and loads the configured
 Matomo script without an eager pageview. Script readiness activates Astro-owned
 pageviews containing current URL and title plus the preceding virtual URL as
-referrer. Completed-route history survives script failure and remains separate
+referrer. Each observed completion has its own identity, so same-URL completions
+refresh title and referrer context instead of being suppressed. Completed-route history survives script failure and remains separate
 from any pending pageview. A single coordinator-owned Astro page-load observer
 continues recording completed routes while a vendor generation is inactive,
 allowing retry and in-flight navigation to recover without losing the current
@@ -196,7 +204,8 @@ requires prior successful script-load validation and the retained command proxy'
 API to remain callable. A matching bootstrap may requalify the exact retained,
 load-proven Matomo identities after a transient command exception once that same
 proxy is callable again. A never-validated startup array cannot qualify or
-accept events. Script failure removes the package script and only
+accept events; a rejected pageview completion remains pending through that
+requalification attempt. Script failure removes the package script and only
 global values assigned while that script was `document.currentScript`; unrelated
 replacement globals are preserved regardless of whether they resemble Matomo.
 The coordinator's navigation observer remains so a later retry has current route

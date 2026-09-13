@@ -2,7 +2,7 @@
 
 `@codeworkslabs/astro-analytics` is an experimental reusable analytics
 integration for Astro. Its source is public. The current source candidate is
-`0.1.0-alpha.10` and is not published to npm.
+`0.1.0-alpha.11` and is not published to npm.
 
 > [!IMPORTANT]
 > Milestone 2 includes real Fathom, Plausible, Google Analytics 4, Matomo, and
@@ -48,6 +48,8 @@ The package currently provides:
 - explicit production, preview, and development enablement;
 - HTTPS-only validation for configurable script and event endpoints;
 - real Fathom, Plausible, Google Analytics 4, Matomo, and Umami pageview and event adapters;
+- completion-identity pageviews that preserve consecutive Astro lifecycle
+  completions even when their URLs are identical;
 - an optional event client enabled only by `events: true`;
 - a provider registry for simultaneous analytics sources;
 - a non-throwing `track()` helper with bounded event names, properties, and
@@ -78,6 +80,12 @@ event-name and event-value positions; other validated properties are not sent
 to Matomo. With `pageviews: "none"`, Astro navigation still refreshes Matomo's
 URL, title, and virtual-referrer context so later events are attributed to the
 last completed route, but no automatic pageview is sent.
+
+Across all five providers, each ready Astro lifecycle completion is a distinct
+pageview even when consecutive completions share a URL. Completions observed
+before vendor readiness coalesce to the latest confirmed route. Provider
+readiness remains closed when the required Astro page-load observer cannot be
+installed.
 
 Umami loads its public tracker with automatic pageviews disabled and sends
 an ordinary document's initial pageview after DOM readiness and ClientRouter

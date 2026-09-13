@@ -102,7 +102,9 @@ all four Consent Mode v2 storage fields to the site's actual policy.
 The adapter always disables the config command's eager pageview and sends
 manual `page_view` events after Astro's post-swap `astro:page-load` signal. It
 includes the current location and title and carries the preceding virtual URL as
-the next pageview's referrer. In the GA4 web stream, also disable **Page changes
+the next pageview's referrer. Each observed completion remains distinct even
+when its URL matches the preceding completion. If the Astro page-load observer
+cannot be installed, GA4 remains not loaded. In the GA4 web stream, also disable **Page changes
 based on browser history events** under Enhanced Measurement; otherwise GA4 can
 send duplicate SPA pageviews independently of `send_page_view: false`.
 
@@ -134,7 +136,8 @@ site-specific snippet URL, such as `https://plausible.io/js/pa-XXXXX.js`.
 The adapter calls `plausible.init()` before loading the script with
 `autoCapturePageviews: false`, the configured endpoint when present, and the
 configured localhost policy. Astro owns initial and client-navigation
-pageviews. Omit consent or use `immediate` to load Plausible; `deferred` and
+pageviews, including consecutive observed completions at the same URL. A missing
+Astro page-load observer keeps the adapter not loaded. Omit consent or use `immediate` to load Plausible; `deferred` and
 `external` fail closed until the shared consent controller is implemented.
 
 ## Fathom
@@ -172,7 +175,10 @@ readiness sends the initial document only when no navigation is in flight. If a
 post-swap page-load arrives before Fathom is ready, it is retained and sent once
 the vendor loads; a load during an in-flight navigation waits for the post-swap
 signal. `pageviews: "astro"` currently selects the same behavior explicitly.
-`pageviews: "none"` sends no pageviews.
+Every observed completion is distinct even when the browser URL is unchanged.
+If the Astro page-load observer cannot be installed, Fathom remains not loaded
+and recovery waits for a later observed completion rather than inferring one
+across the gap. `pageviews: "none"` sends no pageviews.
 
 ## Disabled configuration
 
@@ -235,7 +241,7 @@ referrer. Later observed navigation restores ordinary virtual-referrer edges.
 
 Immediate consent loads Matomo. Deferred and external modes fail closed without
 creating `_paq` or loading the tracker and report `consent-pending`; runtime
-consent activation is not yet part of alpha.10.
+consent activation is not yet part of this milestone.
 
 ## Umami
 
@@ -278,7 +284,7 @@ observed completion is sent even when its URL matches the preceding completion.
 Before readiness, completed routes coalesce to the latest confirmed route and
 superseded history is not replayed.
 
-`data-auto-pageview` was introduced by Umami 3.2.0, so alpha.10 requires an
+`data-auto-pageview` was introduced by Umami 3.2.0, so alpha.10 and later require an
 Umami 3.2-or-later tracker. Earlier self-hosted trackers are not supported
 because they cannot provide the package's duplicate-pageview guarantee.
 
@@ -297,4 +303,4 @@ pageviews. Umami-specific validation
 limits names to 50 characters, data to 50 properties, strings to 500 characters,
 and numbers to four decimal places. The shared package's stricter primitive-only
 event shape remains in force, so nested Umami event objects and arrays are not
-accepted in alpha.10.
+accepted in alpha.10 or later.

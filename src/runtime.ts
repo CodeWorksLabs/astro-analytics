@@ -350,6 +350,12 @@ export function createFathomBootstrapScript(
       }
     } catch { return; }
     let authenticState;
+    const coordinatorInstallHref = (() => {
+      try {
+        const href = Reflect.get(Reflect.get(root, "location"), "href");
+        return typeof href === "string" ? href : undefined;
+      } catch { return undefined; }
+    })();
     const run = (config) => {
     const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
     const isPackageScript = (value) => {
@@ -547,6 +553,8 @@ export function createFathomBootstrapScript(
           Reflect.get(previousReadiness, "ready") === true,
         () => Reflect.get(previousEvents, "enabled") === true,
         );
+        const retryPageview = Reflect.get(previousReadiness, "retryPageview");
+        if (typeof retryPageview === "function") Reflect.apply(retryPageview, previousReadiness, []);
       } catch {}
       return;
     }
@@ -574,12 +582,13 @@ export function createFathomBootstrapScript(
       const previousInstallHref = Reflect.get(previousReadiness, "installHref");
       installHref = typeof previousInstallHref === "string"
         ? previousInstallHref
-        : Reflect.get(Reflect.get(root, "location"), "href");
+        : coordinatorInstallHref;
     } catch {
-      try { installHref = Reflect.get(Reflect.get(root, "location"), "href"); } catch {}
+      installHref = coordinatorInstallHref;
     }
-    let lastTrackedNavigationUrl;
-    let pendingPageviewUrl;
+    let completionCounter = 0;
+    let lastTrackedCompletion;
+    let pendingPageview;
     let vendorReady = false;
     let readinessVerified = false;
     let eventsEnabled = config.events;
@@ -590,7 +599,8 @@ export function createFathomBootstrapScript(
     });
     const readiness = Object.freeze({
       get installHref() { return installHref; },
-      get ready() { return readinessVerified; }
+      get ready() { return readinessVerified; },
+      retryPageview() { flushReadyPageviews(); }
     });
     const readHref = () => {
       try {
@@ -602,37 +612,41 @@ export function createFathomBootstrapScript(
       try { return Reflect.get(documentValue, "prerendering") === true; } catch { return false; }
     };
     let state;
-    const sendPageview = (browserUrl) => {
+    const sendPageview = (pageview) => {
       try {
-        if (!vendorReady || typeof browserUrl !== "string" || browserUrl === lastTrackedNavigationUrl ||
-            authenticState !== state) return;
+        if (!vendorReady || pageview === undefined ||
+            pageview.completion === lastTrackedCompletion ||
+            authenticState !== state) return pageview?.completion === lastTrackedCompletion;
         const fathom = Reflect.get(root, "fathom");
-        if ((typeof fathom !== "object" && typeof fathom !== "function") || fathom === null) return;
+        if ((typeof fathom !== "object" && typeof fathom !== "function") || fathom === null) return false;
         const trackPageviewMethod = Reflect.get(fathom, "trackPageview");
-        if (typeof trackPageviewMethod !== "function") return;
+        if (typeof trackPageviewMethod !== "function") return false;
         Reflect.apply(trackPageviewMethod, fathom, []);
-        lastTrackedNavigationUrl = browserUrl;
-        try { Reflect.set(dedupState, "lastTrackedNavigationUrl", browserUrl); } catch {}
-      } catch {}
+        lastTrackedCompletion = pageview.completion;
+        try { Reflect.set(dedupState, "lastTrackedCompletion", pageview.completion); } catch {}
+        return true;
+      } catch { return false; }
     };
     const pageLoadListener = config.pageviews === "none" ? undefined : () => {
       if (lifecycle.active !== true) return;
       if (authenticState !== state) return;
       const href = readHref();
       if (typeof href !== "string") return;
+      const pageview = Object.freeze({ completion: ++completionCounter, url: href });
       if (vendorReady && !isPrerendering()) {
-        sendPageview(href);
-      } else pendingPageviewUrl = href;
+        pendingPageview = pageview;
+        if (sendPageview(pageview)) pendingPageview = undefined;
+      } else pendingPageview = pageview;
     };
-    let previousLastTrackedNavigationUrl;
+    let previousLastTrackedCompletion;
     try {
       if ((typeof previousDedup === "object" || typeof previousDedup === "function") && previousDedup !== null) {
-          const previousUrl = Reflect.get(previousDedup, "lastTrackedNavigationUrl");
-          if (typeof previousUrl === "string") previousLastTrackedNavigationUrl = previousUrl;
+          const previousCompletion = Reflect.get(previousDedup, "lastTrackedCompletion");
+          if (typeof previousCompletion === "number") previousLastTrackedCompletion = previousCompletion;
       }
     } catch {}
-    lastTrackedNavigationUrl = previousLastTrackedNavigationUrl;
-    const dedupState = { lastTrackedNavigationUrl };
+    lastTrackedCompletion = previousLastTrackedCompletion;
+    const dedupState = { lastTrackedCompletion };
     state = Object.freeze({ dedupState, events, lifecycle, pageLoadListener, readiness, runtimeToken: config.runtimeToken, script });
     let scriptBound = false;
     try {
@@ -656,24 +670,23 @@ export function createFathomBootstrapScript(
     }
     authenticState = state;
     installEventClient(lifecycle, false, state, () => vendorReady, () => eventsEnabled);
-    if (typeof pageLoadListener === "function") {
-      Reflect.apply(Reflect.get(documentValue, "addEventListener"), documentValue, ["astro:page-load", pageLoadListener]);
-    }
     const flushReadyPageviews = () => {
       if (lifecycle.active !== true || isPrerendering()) return;
       if (authenticState !== state) return;
       const currentHref = readHref();
-      const pendingHref = pendingPageviewUrl;
-      pendingPageviewUrl = undefined;
-      if (typeof pendingHref === "string") {
-        if (pendingHref === currentHref) sendPageview(pendingHref);
-      } else if (currentHref === installHref) sendPageview(currentHref);
+      const pending = pendingPageview;
+      if (pending !== undefined) {
+        if (pending.url === currentHref && sendPageview(pending)) pendingPageview = undefined;
+      } else if (currentHref === installHref) {
+        pendingPageview = Object.freeze({ completion: completionCounter, url: currentHref });
+        if (sendPageview(pendingPageview)) pendingPageview = undefined;
+      }
     };
     const failRuntime = () => {
       if (!lifecycleActive) return;
       if (authenticState !== state) return;
       lifecycleActive = false;
-      pendingPageviewUrl = undefined;
+      pendingPageview = undefined;
       if (typeof pageLoadListener === "function") {
         try {
           const removeEventListener = Reflect.get(documentValue, "removeEventListener");
@@ -687,6 +700,16 @@ export function createFathomBootstrapScript(
         if (typeof remove === "function") Reflect.apply(remove, script, []);
       } catch {}
     };
+    if (typeof pageLoadListener === "function") {
+      try {
+        const addEventListener = Reflect.get(documentValue, "addEventListener");
+        if (typeof addEventListener !== "function") throw new TypeError("Astro page-load observer unavailable");
+        Reflect.apply(addEventListener, documentValue, ["astro:page-load", pageLoadListener]);
+      } catch {
+        failRuntime();
+        return;
+      }
+    }
     const hasRequiredFathomApi = () => {
       try {
         const fathom = Reflect.get(root, "fathom");
@@ -781,8 +804,9 @@ export function createPlausibleBootstrapScript(
     let handler;
     let lifecycle;
     let pageLoadListener;
-    let pendingPageviewUrl;
-    let lastTrackedNavigationUrl;
+    let completionCounter = 0;
+    let lastTrackedCompletion;
+    let pendingPageview;
     let vendorReady = false;
     let vendorClient;
     const installHref = (() => {
@@ -833,20 +857,28 @@ export function createPlausibleBootstrapScript(
       Reflect.apply(plausible, root, options === undefined ? [name] : [name, options]);
       return true;
     };
-    const sendPageview = (href) => {
+    const sendPageview = (pageview) => {
       try {
-        if (!vendorReady || lifecycle?.active !== true || typeof href !== "string" || href === lastTrackedNavigationUrl) return;
-        if (!callPlausible("pageview", { url: href })) return;
-        lastTrackedNavigationUrl = href;
-      } catch {}
+        if (!vendorReady || lifecycle?.active !== true || pageview === undefined ||
+            pageview.completion === lastTrackedCompletion) {
+          return pageview?.completion === lastTrackedCompletion;
+        }
+        if (!callPlausible("pageview", { url: pageview.url })) return false;
+        lastTrackedCompletion = pageview.completion;
+        return true;
+      } catch { return false; }
     };
     const flushPageview = () => {
       if (lifecycle?.active !== true || isPrerendering()) return;
       const href = readHref();
-      const pending = pendingPageviewUrl;
-      pendingPageviewUrl = undefined;
-      if (typeof pending === "string" && pending === href) sendPageview(pending);
-      else if (pending === undefined && href === installHref) sendPageview(href);
+      const pending = pendingPageview;
+      if (pending !== undefined && pending.url === href) {
+        if (sendPageview(pending)) pendingPageview = undefined;
+      }
+      else if (pending === undefined && href === installHref) {
+        pendingPageview = Object.freeze({ completion: completionCounter, url: href });
+        if (sendPageview(pendingPageview)) pendingPageview = undefined;
+      }
     };
     const run = (nextConfig) => {
       let cleanup;
@@ -857,6 +889,7 @@ export function createPlausibleBootstrapScript(
         if (activeConfig !== undefined) {
           if (lifecycle?.active === true) {
             registerHandler();
+            if (vendorReady && !isPrerendering()) flushPageview();
             return;
           }
           activeConfig = undefined;
@@ -866,8 +899,9 @@ export function createPlausibleBootstrapScript(
         activeGeneration = generation;
         vendorReady = false;
         vendorClient = undefined;
-        pendingPageviewUrl = undefined;
-        lastTrackedNavigationUrl = undefined;
+        completionCounter = 0;
+        pendingPageview = undefined;
+        lastTrackedCompletion = undefined;
         lifecycleActive = true;
         lifecycle = Object.freeze({ get active() { return lifecycleActive; } });
         const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
@@ -962,7 +996,7 @@ export function createPlausibleBootstrapScript(
           activeGeneration = undefined;
           activeConfig = undefined;
           vendorReady = false;
-          pendingPageviewUrl = undefined;
+          pendingPageview = undefined;
           if (typeof pageLoadListener === "function") {
             try {
               const remove = Reflect.get(documentValue, "removeEventListener");
@@ -989,14 +1023,14 @@ export function createPlausibleBootstrapScript(
           if (activeGeneration !== generation || lifecycle.active !== true) return;
           const href = readHref();
           if (typeof href !== "string") return;
-          if (vendorReady && !isPrerendering()) sendPageview(href);
-          else pendingPageviewUrl = href;
+          const pageview = Object.freeze({ completion: ++completionCounter, url: href });
+          pendingPageview = pageview;
+          if (vendorReady && !isPrerendering() && sendPageview(pageview)) pendingPageview = undefined;
         };
         if (typeof pageLoadListener === "function") {
           const addEventListener = Reflect.get(documentValue, "addEventListener");
-          if (typeof addEventListener === "function") {
-            Reflect.apply(addEventListener, documentValue, ["astro:page-load", pageLoadListener]);
-          }
+          if (typeof addEventListener !== "function") { fail(); return; }
+          Reflect.apply(addEventListener, documentValue, ["astro:page-load", pageLoadListener]);
         }
         Reflect.apply(Reflect.get(script, "addEventListener"), script, ["load", () => {
           try {
@@ -1091,7 +1125,9 @@ export function createGoogleAnalyticsBootstrapScript(
     let ownedGtag;
     let ownedDataLayer;
     let pageLoadListener;
-    let pendingPageviewUrl;
+    let completionCounter = 0;
+    let lastTrackedCompletion;
+    let pendingPageview;
     let lastTrackedNavigationUrl;
     const installHref = (() => {
       try {
@@ -1150,8 +1186,12 @@ export function createGoogleAnalyticsBootstrapScript(
         return true;
       } catch { return false; }
     };
-    const sendPageview = (href, generation) => {
-      if (!active || activeGeneration !== generation || typeof href !== "string" || href === lastTrackedNavigationUrl) return;
+    const sendPageview = (pageview, generation) => {
+      if (!active || activeGeneration !== generation || pageview === undefined ||
+          pageview.completion === lastTrackedCompletion) {
+        return pageview?.completion === lastTrackedCompletion;
+      }
+      const href = pageview.url;
       const parameters = Object.create(null);
       Reflect.defineProperty(parameters, "page_location", {
         configurable: false, enumerable: true, value: href, writable: false,
@@ -1176,16 +1216,23 @@ export function createGoogleAnalyticsBootstrapScript(
         configurable: false, enumerable: true, value: config.measurementId, writable: false,
       });
       if (callGtag("event", "page_view", parameters)) {
+        lastTrackedCompletion = pageview.completion;
         lastTrackedNavigationUrl = href;
+        return true;
       }
+      return false;
     };
     const flushPageview = (generation) => {
       if (!active || activeGeneration !== generation || isPrerendering()) return;
       const href = readHref();
-      const pending = pendingPageviewUrl;
-      pendingPageviewUrl = undefined;
-      if (typeof pending === "string" && pending === href) sendPageview(pending, generation);
-      else if (pending === undefined && href === installHref) sendPageview(href, generation);
+      const pending = pendingPageview;
+      if (pending !== undefined && pending.url === href) {
+        if (sendPageview(pending, generation)) pendingPageview = undefined;
+      }
+      else if (pending === undefined && href === installHref) {
+        pendingPageview = Object.freeze({ completion: completionCounter, url: href });
+        if (sendPageview(pendingPageview, generation)) pendingPageview = undefined;
+      }
     };
     const registerHandler = () => {
       if (!config.events || handler === undefined) return;
@@ -1204,12 +1251,17 @@ export function createGoogleAnalyticsBootstrapScript(
       if (!sameConfig(nextConfig)) return;
       if (active) {
         registerHandler();
+        if (vendorReady && typeof activeGeneration === "number" && !isPrerendering()) {
+          flushPageview(activeGeneration);
+        }
         return;
       }
       const generation = ++generationCounter;
       activeGeneration = generation;
       vendorReady = false;
-      pendingPageviewUrl = undefined;
+      completionCounter = 0;
+      pendingPageview = undefined;
+      lastTrackedCompletion = undefined;
       lastTrackedNavigationUrl = undefined;
       const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
       handler = Object.freeze({
@@ -1268,7 +1320,7 @@ export function createGoogleAnalyticsBootstrapScript(
         active = false;
         activeGeneration = undefined;
         vendorReady = false;
-        pendingPageviewUrl = undefined;
+        pendingPageview = undefined;
         if (typeof localPageLoadListener === "function") {
           try {
             const remove = Reflect.get(documentValue, "removeEventListener");
@@ -1357,15 +1409,15 @@ export function createGoogleAnalyticsBootstrapScript(
           if (!active || activeGeneration !== generation) return;
           const href = readHref();
           if (typeof href !== "string") return;
-          if (vendorReady && !isPrerendering()) sendPageview(href, generation);
-          else pendingPageviewUrl = href;
+          const pageview = Object.freeze({ completion: ++completionCounter, url: href });
+          pendingPageview = pageview;
+          if (vendorReady && !isPrerendering() && sendPageview(pageview, generation)) pendingPageview = undefined;
         };
         pageLoadListener = localPageLoadListener;
         if (typeof localPageLoadListener === "function") {
           const addEventListener = Reflect.get(documentValue, "addEventListener");
-          if (typeof addEventListener === "function") {
-            Reflect.apply(addEventListener, documentValue, ["astro:page-load", localPageLoadListener]);
-          }
+          if (typeof addEventListener !== "function") { cleanup(); return; }
+          Reflect.apply(addEventListener, documentValue, ["astro:page-load", localPageLoadListener]);
         }
         active = true;
         Reflect.apply(Reflect.get(script, "addEventListener"), script, ["load", () => {
@@ -1450,10 +1502,13 @@ export function createMatomoBootstrapScript(
     let vendorReady = false;
     let navigationObservationGap = false;
     let navigationObserverInstalled = false;
+    let completedNavigationCompletion = 0;
+    let lastTrackedCompletion;
     let lastTrackedNavigationUrl;
-    let vendorContextNavigationUrl;
+    let vendorContextCompletion;
     let pendingPageviewUrl;
     let pendingPageviewReferrer;
+    let pendingPageviewCompletion;
     const installHref = (() => {
       try {
         const href = Reflect.get(Reflect.get(root, "location"), "href");
@@ -1552,18 +1607,19 @@ export function createMatomoBootstrapScript(
         return true;
       } catch { return false; }
     };
-    const applyVendorContext = (href, referrer, title) => {
+    const applyVendorContext = (href, referrer, title, completion) => {
       if (typeof href !== "string") return false;
       if (referrer === null) {
         if (!callQueue(["setReferrerUrl", ""])) return false;
       } else if (typeof referrer === "string" && !callQueue(["setReferrerUrl", referrer])) return false;
       if (!callQueue(["setCustomUrl", href])) return false;
       if (typeof title === "string" && !callQueue(["setDocumentTitle", title])) return false;
-      vendorContextNavigationUrl = href;
+      vendorContextCompletion = completion;
       return true;
     };
-    const sendPageview = (href, generation, explicitReferrer, explicitTitle) => {
-      if (!active || activeGeneration !== generation || typeof href !== "string" || href === lastTrackedNavigationUrl) return;
+    const sendPageview = (href, generation, explicitReferrer, explicitTitle, completion) => {
+      if (!active || activeGeneration !== generation || typeof href !== "string" ||
+          completion === lastTrackedCompletion) return completion === lastTrackedCompletion;
       const referrerIsUnknown = explicitReferrer === null;
       let referrer = referrerIsUnknown
         ? null
@@ -1575,8 +1631,13 @@ export function createMatomoBootstrapScript(
         } catch {}
       }
       const title = typeof explicitTitle === "string" ? explicitTitle : readTitle();
-      if (!applyVendorContext(href, referrer, title)) return;
-      if (callQueue(["trackPageView"])) lastTrackedNavigationUrl = href;
+      if (!applyVendorContext(href, referrer, title, completion)) return false;
+      if (callQueue(["trackPageView"])) {
+        lastTrackedCompletion = completion;
+        lastTrackedNavigationUrl = href;
+        return true;
+      }
+      return false;
     };
     const flushCompletedNavigation = (generation) => {
       if (!active || activeGeneration !== generation || isPrerendering()) return;
@@ -1584,27 +1645,32 @@ export function createMatomoBootstrapScript(
       if (typeof completedNavigationUrl !== "string" || href !== completedNavigationUrl) return;
       const pending = pendingPageviewUrl;
       const pendingReferrer = pendingPageviewReferrer;
-      pendingPageviewUrl = undefined;
-      pendingPageviewReferrer = undefined;
+      const pendingCompletion = pendingPageviewCompletion;
       if (config.pageviews === "none") {
-        applyVendorContext(completedNavigationUrl, completedNavigationReferrer, completedNavigationTitle);
+        if (applyVendorContext(completedNavigationUrl, completedNavigationReferrer, completedNavigationTitle, completedNavigationCompletion)) {
+          pendingPageviewUrl = undefined;
+          pendingPageviewReferrer = undefined;
+          pendingPageviewCompletion = undefined;
+        }
       } else if (typeof pending === "string" && pending === completedNavigationUrl) {
-        sendPageview(pending, generation, pendingReferrer, completedNavigationTitle);
+        if (sendPageview(pending, generation, pendingReferrer, completedNavigationTitle, pendingCompletion)) {
+          pendingPageviewUrl = undefined;
+          pendingPageviewReferrer = undefined;
+          pendingPageviewCompletion = undefined;
+        }
       }
     };
     const recordCompletedNavigation = () => {
       const href = readHref();
       if (typeof href !== "string") return;
       const closesObservationGap = navigationObservationGap;
-      if (href !== completedNavigationUrl) {
-        completedNavigationReferrer = closesObservationGap ? null : completedNavigationUrl;
-        completedNavigationUrl = href;
-      } else if (closesObservationGap) {
-        completedNavigationReferrer = null;
-      }
+      completedNavigationReferrer = closesObservationGap ? null : completedNavigationUrl;
+      completedNavigationUrl = href;
+      completedNavigationCompletion += 1;
       completedNavigationTitle = readTitle();
       pendingPageviewUrl = href;
       pendingPageviewReferrer = completedNavigationReferrer;
+      pendingPageviewCompletion = completedNavigationCompletion;
       if (closesObservationGap) {
         navigationObservationGap = false;
         try { run(config); } catch {}
@@ -1641,6 +1707,7 @@ export function createMatomoBootstrapScript(
           vendorReady = true;
           pendingPageviewUrl = completedNavigationUrl;
           pendingPageviewReferrer = completedNavigationReferrer;
+          pendingPageviewCompletion = completedNavigationCompletion;
           flushCompletedNavigation(activeGeneration);
         }
         registerHandler();
@@ -1650,9 +1717,11 @@ export function createMatomoBootstrapScript(
       activeGeneration = generation;
       vendorLoadProven = false;
       vendorReady = false;
-      vendorContextNavigationUrl = undefined;
+      vendorContextCompletion = undefined;
       pendingPageviewUrl = completedNavigationUrl;
       pendingPageviewReferrer = completedNavigationReferrer;
+      pendingPageviewCompletion = completedNavigationCompletion;
+      lastTrackedCompletion = undefined;
       lastTrackedNavigationUrl = undefined;
       const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
       handler = Object.freeze({
@@ -1671,8 +1740,8 @@ export function createMatomoBootstrapScript(
               return { ok: false, reason: "adapter-not-loaded" };
             }
             if (config.pageviews === "none" && typeof completedNavigationUrl === "string" &&
-                vendorContextNavigationUrl !== completedNavigationUrl &&
-                !applyVendorContext(completedNavigationUrl, completedNavigationReferrer, completedNavigationTitle)) {
+                vendorContextCompletion !== completedNavigationCompletion &&
+                !applyVendorContext(completedNavigationUrl, completedNavigationReferrer, completedNavigationTitle, completedNavigationCompletion)) {
               return { ok: false, reason: "adapter-not-loaded" };
             }
             const hasEventName = properties !== undefined && Object.prototype.hasOwnProperty.call(properties, "_name");
@@ -1745,6 +1814,7 @@ export function createMatomoBootstrapScript(
         vendorReady = false;
         pendingPageviewUrl = undefined;
         pendingPageviewReferrer = undefined;
+        pendingPageviewCompletion = undefined;
         try {
           if ((typeof localScript === "object" || typeof localScript === "function") && localScript !== null) {
             const remove = Reflect.get(localScript, "remove");
