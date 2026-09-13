@@ -2,6 +2,252 @@
 
 Updated: 2026-09-13
 
+## Active alpha.10 correction — 2026-09-13
+
+The immutable public `v0.1.0-alpha.9` tag remains at product commit
+`43473be89dd9e29144c92f3ac0f6e6ab0776f104`. Both repository-driven sandboxes
+and their self-hosted Umami records successfully qualified that exact candidate.
+Afterward, a fresh full committed internal review found one P2: Umami used URL
+equality as its pageview deduplication identity, so a legitimate consecutive
+`astro:page-load` completion at the same URL was suppressed and its updated
+title and route context were lost. Alpha.9 is therefore superseded; its tag must
+not be moved or deleted, and its npm package was never published.
+
+The working `0.1.0-alpha.10` correction gives every observed completion a
+monotonic identity and deduplicates only reentry of that exact retained
+completion. A direct regression fires consecutive `astro:page-load` events at
+the same URL with a changed title and proves that both payloads are sent with
+the appropriate completed-route context. The first alpha.10 internal review
+then found that the newly sent second completion still inherited the older
+route's referrer. That P2 is corrected: every observed completion now uses the
+immediately preceding completed URL as its referrer, including when both URLs
+are equal, and the regression asserts the exact `A → B → B` edge. The first
+alpha.10 review artifact and freeze ledger are superseded. A second internal
+pass then identified that the new documentation overclaimed this behavior for
+completions observed before tracker readiness. That path intentionally retains
+only the latest confirmed route and does not replay superseded history. The
+claim is narrowed to post-readiness completions, and regression coverage now
+proves both ready same-URL delivery and pre-ready same-URL coalescing with the
+latest title and exact route edge. The R2 freeze is also superseded. At that
+point the candidate was still uncommitted and untagged and required
+fresh source gates, both independent reviews, exact-artifact consumer
+qualification, sandbox deployment, browser-runtime qualification, and
+provider-side verification. The subsequent results are recorded below.
+
+Code Reviewer completed the R3 comprehensive source/static/execution/artifact
+phase with 0 P0, 0 P1, 1 P2, and 0 P3 findings. Its P2 found that the
+compatibility tables did not bind their “current” evidence explicitly to a
+candidate and could therefore be read as pre-claiming alpha.10 qualification.
+The finding was accepted. Both tables now identify the alpha.10 R3 artifact and
+the September 13, 2026 qualification date.
+
+Before that documentation correction, the exact R3 artifact (45,981 bytes,
+SHA-256
+`6101EED01D314BC3CEE5E322788E69E6775CB991803455204EC6C0A1DF88572F`)
+was installed into fresh disposable clones under
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-alpha10-r3-consumers-20260913`.
+Both installed exact version `0.1.0-alpha.10`, reported zero production
+dependency vulnerabilities, completed production builds, emitted their
+configured Umami runtime and website UUID, and passed Wrangler deployment
+dry-runs without uploading. The Astro lock SHA-256 is
+`5F448DE53318944A4E25DBF0D84FA97EC271CB47938414B061F254EDFE4DDCAC`;
+the Starlight lock SHA-256 is
+`070FBABA5BBA27CC07BC443A37248848AAE26FFACB90CDD21A65E245E9092307`.
+The initial disposable Astro command ran from its parent directory and failed
+before testing; it was replayed from the correct clone and passed. No canonical
+repository was affected.
+
+Because the P2 correction changes shipped documentation members, the R3 archive
+is superseded as the prospective release artifact even though its runtime bytes
+and consumer behavior remain applicable. The replacement R4 archive is:
+
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-alpha10-r4-review-20260913\codeworkslabs-astro-analytics-0.1.0-alpha.10.tgz`
+
+It contains the intended 19 members, is 46,103 bytes compressed / 222,319 bytes
+unpacked, and has SHA-256
+`6FF1B0809F463345577C50A918AF68A60AEABD788416EE2BEDD3D64EA629B565`.
+Fresh disposable clones under
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-alpha10-r4-consumers-20260913`
+installed that exact archive as version `0.1.0-alpha.10`. Both reported zero
+production dependency vulnerabilities, completed production builds, and passed
+Wrangler deployment dry-runs without uploading. Astro built three pages and has
+lock SHA-256
+`E980EF85BD16BF9DEF750D7A0B760C98362F5CCB749ED40E33DC3F463A35FC7D`.
+Starlight built six pages, with only its expected empty-i18n and missing-404
+warnings, and has lock SHA-256
+`F6A6E98C1239A1AB0EB176988FB333C8E50887B3E0166FD9477E788F3AC5DD70`.
+No canonical repository was affected. Localized internal and Code Reviewer
+closure remain required before commit/tag or canonical sandbox mutation.
+
+### Alpha.10 R4 replacement freeze
+
+The product owner freezes R4 for localized closure of A10R3-01. Implementation,
+shipped documentation, package inputs, the exact archive, both disposable
+consumer inputs, and their recorded evidence are stable; editing has stopped and
+no changes are queued. The base is public `main`/`origin/main` at
+`e8829a0c4cf660f717a2f5bffac56dbc182d43d8`, with base tree
+`3bf9a24c3922dea6e14aac73f08fe379d60abb04`. Twelve tracked files are modified,
+zero files are staged, and zero files are untracked. The byte-preserving product
+diff identity excluding this checkpoint is
+`db155247ae046746ca1395549ff28ed7023fd6ef`.
+
+The complete shipped R3-to-R4 archive-member delta is limited to
+`docs/getting-started.md`, `docs/README.md`, and
+`docs/versioning-and-releases.md`; package runtime, tests, manifest, lockfile,
+and all other shipped members are byte-identical. The R3 consumer evidence is
+the separately identified pre-correction run above. The R4 consumer evidence is
+the replacement run and locks recorded immediately above.
+
+The localized reviewer may inspect all source, archive, receipt, and generated
+consumer evidence read-only. It may also rerun builds, audits, tests, archive
+inspection, and Wrangler dry-runs in the declared disposable R4 consumer tree;
+permitted incidental effects are disposable `node_modules`, build output,
+caches, registry reads, and read-only GitHub fetches. Canonical repository
+mutation, deployment, provider administration, commit, push, tag, GitHub
+Release, and npm publication remain outside this freeze.
+
+Code Reviewer then closed A10R3-01 on R4 with a census of 0 P0, 0 P1, 0 P2,
+and 0 P3 and disposition `INTERNAL CODE REVIEW PASS`. It independently matched
+all 12 declared source hashes, both Git diff identities, the 19-member archive,
+the complete three-member R3-to-R4 archive delta, both consumer lineages and
+locks, generated asset references, and the declared Astro 7.3.2 / Starlight
+0.42.0 / Node 22.22.2 matrix. It freshly replayed both R4 production audits,
+builds, and Wrangler dry-runs in the disposable consumers. This localized
+closure is not a new comprehensive runtime or live/release acceptance.
+
+### Alpha.10 R5 tag-stable documentation freeze
+
+Before commit/tag, four shipped documents were made tag-state-neutral so the
+act of creating the immutable source tag cannot immediately make its own package
+documentation false. `README.md`, `docs/README.md`,
+`docs/getting-started.md`, and `docs/versioning-and-releases.md` no longer call
+the candidate “untagged” or leave the already completed R4 documentation review
+pending. No runtime, test, manifest, lockfile, configuration contract, or
+consumer input changed.
+
+The exact R5 archive is:
+
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-alpha10-r5-review-20260913\codeworkslabs-astro-analytics-0.1.0-alpha.10.tgz`
+
+It contains the intended 19 members, is 46,002 bytes compressed / 222,181 bytes
+unpacked, has SHA-256
+`3B290C116721A1792FB8653064074FF06DABD81A322951F8B7921EE2769DA8FF`,
+npm SHA-1 `9500AAF04B35C3FC2DD6CCB239CD19283C0F70C6`, and integrity
+`sha512-P85JDEHeFEhorEISW47eOE78ivR++6aKtWw/xedl6SrojkaLliut9JaY3doS6A+v+g+bMyUWGXTumeWS8GLPbg==`.
+Strict TypeScript checking, all 140 tests, full and production audits, and
+`git diff --check` pass. R5 is frozen with editing stopped and no queued changes
+for a final localized documentation/archive identity check. Canonical sandbox
+mutation, commit, push, tag, GitHub Release, npm publication, provider
+administration, and deployment have not occurred in this R5 preparation.
+
+Code Reviewer completed the localized R5 check with 0 P0, 0 P1, 1 P2, and 1 P3.
+A10R5-01 found that the tag-neutral status text called R4 only a “replacement
+artifact,” allowing readers to misattribute R4's exact consumer qualification
+to the distinct R5 archive. The corrected text names R4 and limits its relevance
+for later documentation-only archives to unchanged runtime; exact acceptance is
+reserved for source-tag archive installation. A10R5-02 found that the declared
+R5 unpacked size was 38 bytes high. The corrected 19-member sum is 222,181
+bytes; compressed size and cryptographic identities were already correct. R5 is
+therefore superseded as documentation evidence, with runtime and other shipped
+members unchanged.
+
+### Alpha.10 R6 documentation correction freeze
+
+R6 corrects A10R5-01 and A10R5-02 only. The R4 qualification is now named
+explicitly in both affected shipped documents, later documentation-only archives
+claim only unchanged-runtime relevance, and exact acceptance is reserved for the
+source-tag archive installed by the repository-driven sandboxes. The R5 unpacked
+size is corrected above.
+
+The exact R6 archive is:
+
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-alpha10-r6-review-20260913\codeworkslabs-astro-analytics-0.1.0-alpha.10.tgz`
+
+It contains the intended 19 members, is 46,122 bytes compressed / 222,514 bytes
+unpacked, has SHA-256
+`38B0A09AA82BB6712FF18C72C6FCF82CD0190A6202E225023D7D81A3BEEF46E1`,
+npm SHA-1 `9A0C3EF079BAB6A0C4F2C469FB9D80167CB9BD9F`, and integrity
+`sha512-MamdgmY5gvwNN/r5OCcqhHcLfjZceQw4WR24pirXTN2aQtd8kQsQOCKDPPDlpwj92HwaXoaXJkIGyeLqslcCfA==`.
+The complete R5-to-R6 shipped delta is exactly `docs/README.md` and
+`docs/versioning-and-releases.md`; the other 17 members are byte-identical.
+`git diff --check` passes. R6 is frozen with editing stopped and no queued
+changes for localized closure of the two R5 documentation findings.
+
+At the R6 freeze, the documentation-site repository contained prepared but
+uncommitted alpha.9 source synchronization. Publication had been halted when the
+P2 was found. The subsequent work below preserved that history, regenerated the
+section from accepted alpha.10, and published it only after the applicable gates
+closed. No npm publication or GitHub Release was authorized.
+
+### Alpha.10 R6 closure, immutable tag, and live qualification
+
+Code Reviewer completed the localized R6 closure of A10R5-01 and A10R5-02 with
+0 P0, 0 P1, 0 P2, and 0 P3 and disposition `INTERNAL CODE REVIEW PASS`. The
+separate visible internal review also completed with no actionable defect.
+Strict TypeScript checking, all 140 tests, full and production audits, and diff
+validation passed. No localized evidence gap remains.
+
+The accepted R6 product was committed to this repository's `main` as
+`06d8e3f4185a2509f1cdf155ae2d6b91b2ed245d` with tree
+`09dff8b702c9ef17a74627944c2ae3afb07b39c4`, then pushed. Immutable annotated
+tag `v0.1.0-alpha.10` has tag-object identity
+`d0e8f42280e7c56b03dfaf683547bd2efa14b543` and resolves to that exact commit.
+The archive freshly packed from a public clone of the tag is byte-identical to
+R6. It has 19 members, is 46,122 bytes compressed / 222,514 bytes unpacked, and
+retains SHA-256
+`38B0A09AA82BB6712FF18C72C6FCF82CD0190A6202E225023D7D81A3BEEF46E1`, npm
+SHA-1 `9A0C3EF079BAB6A0C4F2C469FB9D80167CB9BD9F`, and integrity
+`sha512-MamdgmY5gvwNN/r5OCcqhHcLfjZceQw4WR24pirXTN2aQtd8kQsQOCKDPPDlpwj92HwaXoaXJkIGyeLqslcCfA==`.
+
+Both canonical sandbox repositories installed that exact public tag archive and
+passed clean install, production audit, production build, Wrangler dry-run, and
+exact-tag identity checks. The Astro sandbox repository's `main` commit is
+`f72d5878a33b98ea3fb4a0ae39f9bc00c1d76eb6`; GitHub run `34783356819`
+passed and Cloudflare serves Worker version
+`0cfba6c1-dbe7-4b17-b96b-8d2cc7f9e23b` at 100 percent. The stock Starlight
+sandbox repository's `main` commit is
+`c338beccce4938a044ab96e7c246ae6765b6457a`; GitHub run `34783361990`
+passed and Cloudflare serves Worker version
+`6683e6fa-357d-43fa-acf8-6f3c19c7fac2` at 100 percent.
+
+Live browser verification on both sandboxes confirmed the intended Plausible,
+Google Analytics 4, Matomo, and Umami scripts and identifiers. Each harness
+reported Umami ready, accepted its explicit journey event, and advanced to the
+destination. Both distinct self-hosted Umami website dashboards then displayed
+the new `/analytics/` pageview, named journey event, and
+`/analytics/next/` pageview in order. Plausible, GA4, and Matomo also accepted
+the journey in that browser run. Fathom reported `adapter-not-loaded` in that
+specific browser session; its previously completed dedicated sandbox/provider
+qualification remains the applicable Fathom evidence and alpha.10 did not alter
+the Fathom runtime.
+
+The public documentation was regenerated from the pinned annotated alpha.10 tag.
+Its sync validates tag type, exact commit, package version, and every source page
+before writing, and can reproduce the section from a clean docs checkout without
+a parent or sibling product checkout. The final docs review first found three P2
+issues—partial writes on late validation failure, the external-checkout
+dependency plus unproved tag type, and an event summary that omitted Umami. All
+were corrected; failure atomicity, lightweight-tag rejection, clean-clone sync,
+fresh install, zero-vulnerability production audit, 33-page build, Pagefind,
+sitemap, Wrangler dry-run, diff validation, and final no-defect internal review
+all passed.
+
+Docs publication commit `e1bb02b4a3d7bac262afea1a00a94d4ac5b89caf` passed
+GitHub run `34785042143` and deployed Cloudflare Worker version
+`9b94a90d-5b84-429a-abeb-155a60864a76`. The follow-up evidence commit
+`b52272735f6aa4f7a96c58784452f1b31e3fbb69` passed GitHub run
+`34785145720`; Cloudflare serves resulting Worker version
+`609a49a8-0527-463e-a581-92188099ba0f` at 100 percent. Live verification of
+`https://docs.codeworkslabs.dev/analytics-for-astro/` confirmed the exact tag and
+commit, all five providers, npm-unpublished status, complete ten-page menu,
+sandbox qualification links, release notes, versioning guidance, and exact
+ownership wording.
+
+The first-stable feature set and all five provider adapter gates are now
+satisfied. The next product action is a formal RC-readiness assessment, not an
+automatic RC tag. npm publication and a GitHub Release remain absent and require
+separate authorization.
+
 ## Current State
 
 The independent product repository is
@@ -18,13 +264,12 @@ GitHub Releases, and production-site integration remain separately controlled.
 The source repository is public under the MIT license. The npm package remains
 unpublished and retains `"private": true` as a publication safeguard until an
 authorized package-release change. The current intended Milestone 2 candidate
-version is `0.1.0-alpha.8`. It contains the live-qualified Fathom, Plausible,
-and Google Analytics 4 adapters plus the clean static-gated Matomo adapter,
-provider readiness and independent result reporting, and the corrected GA4
-`arguments`-object queue contract, while retaining the reviewed
-Astro/Starlight support boundary. The exact R5 Matomo candidate passed all four
-separate Code Reviewer gates with 0 P0/P1/P2/P3 findings. Live Matomo sandbox
-qualification is the next gate; the package remains unpublished to npm.
+version is the `0.1.0-alpha.10` source candidate described above.
+It contains the five implemented providers, provider readiness and independent
+result reporting, and the reviewed Astro/Starlight support boundary. Alpha.10
+has completed clean artifact-consumer qualification and documentation closure;
+repository-sandbox, browser-runtime, and provider-side gates remain before it
+replaces superseded alpha.9. The package remains unpublished to npm.
 Its canonical public remote is
 `https://github.com/CodeWorksLabs/astro-analytics`.
 The public-facing product title is now **Analytics for Astro**. The npm package
