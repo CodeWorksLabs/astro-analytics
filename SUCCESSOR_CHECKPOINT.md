@@ -2062,3 +2062,42 @@ This is a clean static candidate disposition, not live Matomo qualification or
 release authorization. No commit, push, tag, GitHub Release, npm publication,
 canonical sandbox mutation, provider administration, documentation publication,
 or deployment was authorized or performed by the review.
+
+## Matomo alpha.8 release identity and live qualification — 2026-09-13
+
+The reviewed R5 candidate was committed to public `main` as
+`f480c3ce152c49637efcfea6dc38c7577fa28d82`, tagged with annotated public tag
+`v0.1.0-alpha.8`, and pushed. No npm publication or GitHub Release occurred.
+Both canonical CodeWorksLabs sandbox repositories retain the exact reviewed
+40,534-byte package archive with SHA-256
+`FE5C5FD1F8DFECDD2BF0C233663FE88507A5C9744DD6FE8C98E2D42AD71E0717`, making
+fresh Cloudflare Git checkouts independently installable. Their GitHub clean
+verification runs passed.
+
+Cloudflare Workers Builds now connects each Worker directly to its matching
+CodeWorksLabs repository on production branch `main`, root `/`, build command
+`npm run build`, and deploy command `npm run deploy`. The corrected live
+repository-driven versions are Astro
+`fd130e33-afb2-45c5-bed8-223dc0970b4f` from sandbox commit `b583414` and stock
+Starlight `997b454e-6dba-4188-8211-07d99511f33b` from sandbox commit `4138950`.
+GitHub verification runs `34767915445` and `34767917638` passed for those exact
+commits.
+
+Live Chrome qualification selected Matomo explicitly on both permanent journey
+pages. Each browser client reported Matomo `ready`, accepted the named event,
+advanced to `/analytics/next/`, and displayed Matomo's accepted-event receipt.
+The self-hosted Matomo dashboard independently recorded the full sequences:
+
+- site ID `2`: `/analytics/`, event
+  `Astro sandbox - cwl_astro_journey_continued`, then `/analytics/next/`;
+- site ID `3`: `/analytics/`, event
+  `Starlight sandbox - cwl_starlight_journey_continued`, then
+  `/analytics/next/`.
+
+This completes alpha.8 Matomo package-consumer, repository-driven deployment,
+browser-runtime, and provider-side qualification. Fathom was blocked in the
+qualification Chrome profile, while Plausible and Google Analytics 4 accepted
+the same fan-out events; the Fathom profile result does not qualify or
+disqualify Matomo. Product documentation now treats Matomo as implemented and
+live-qualified. Umami remains the only accepted first-stable provider not yet
+implemented.

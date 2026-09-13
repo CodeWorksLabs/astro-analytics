@@ -22,7 +22,9 @@ The current working Milestone 2 candidate is `0.1.0-alpha.8`:
 
 - `0.1.0` identifies the first pre-stable feature line.
 - `alpha` states that the package is incomplete and not production-ready.
-- `.8` identifies the unreleased Matomo adapter candidate.
+- `.8` identifies the reviewed and live-qualified Matomo adapter candidate;
+  its public source tag is `v0.1.0-alpha.8`, while npm publication remains
+  unauthorized and absent.
 - `.7` identifies the published source tag for the corrected Google Analytics 4 adapter candidate whose
   `gtag()` queue follows Google's canonical `arguments`-object contract.
 - `.6` is the superseded initial Google Analytics 4 adapter candidate built on
@@ -79,10 +81,11 @@ publication, site integration, or deployment. Before any release:
 The current `private: true` manifest is an additional fail-closed publication
 guard. Removing it requires separate release authorization and review.
 
-Matomo is implemented in the alpha.8 working tree but still requires review,
-package-consumer evidence, and live-provider qualification. Umami remains a
-planned feature addition requiring a later numbered alpha candidate. The line
-may advance to an RC only after all five
+Matomo completed independent review, clean Astro and Starlight package-consumer
+qualification, repository-driven sandbox deployment, and provider-side live
+qualification on September 13, 2026. Umami remains a planned feature addition
+requiring a later numbered alpha candidate. The line may advance to an RC only
+after all five
 accepted providers are implemented and the feature set is believed complete.
 
 The package does not currently advertise the `astro-integration` discovery
