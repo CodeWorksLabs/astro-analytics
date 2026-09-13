@@ -17,9 +17,8 @@ pageviews and custom events. No queue or runtime consent activation API is inclu
 - An authorized local package artifact or workspace dependency
 
 These are manifest eligibility ranges, not proof that every matching version has
-been tested. The exact alpha.10 artifact completed clean consumer qualification
-on September 13, 2026. Alpha.11 changes runtime behavior and must repeat that
-qualification before the matrix becomes current evidence for this candidate:
+been tested. The exact alpha.11 package completed clean consumer qualification
+on September 13, 2026. Its current exact consumer evidence is:
 
 | Consumer | Qualified versions |
 | --- | --- |

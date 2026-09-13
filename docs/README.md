@@ -14,8 +14,9 @@ completed package, repository-driven sandbox, browser-runtime, and
 provider-side live qualification, but the later doctrine-complete readiness
 working review found URL-only completion suppression in the four older
 adapters and incomplete observer failure handling in three. Alpha.11 applies
-the cross-provider correction and must complete the new freeze's independent
-review and consumer gates before any RC decision.
+the cross-provider correction. Its exact package has passed clean stock Astro
+and Starlight consumer gates; the new freeze must still complete independent
+review before any RC decision.
 
 ## Guides
 

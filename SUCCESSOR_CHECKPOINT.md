@@ -16,18 +16,21 @@ unlike the corrected Umami adapter, and could suppress a genuine consecutive
 `astro:page-load` completion at the same URL. It also found that Plausible and
 GA4 could report ready after failing to install their Astro navigation observer,
 while Fathom's recovery could infer a route across that observation gap. The
-current uncommitted alpha.11 correction gives all five adapters completion
+alpha.11 correction gives all five adapters completion
 identity, preserves GA4/Matomo same-URL referrer and title context, and keeps
 Fathom/Plausible/GA4 closed until observation is installed. Regression coverage
-has increased from 140 to 143 tests.
+has increased from 140 to 146 tests. Product commit
+`22a1119b0606599c73bcfcc0bd6361b4d916e7b1` passed the complete product gate;
+its exact package then passed clean stock Astro and Starlight consumer gates.
 
 Baseline before mutation passed 140/140 tests, strict typecheck, a deterministic
 alpha.10 dry-run pack, and zero-vulnerability production audits in the product,
-both sandboxes, and docs repository. The correction is still in progress: run
-the complete product gate, inspect the diff, commit/push the product repository's
-own `main`, build the exact alpha.11 artifact, update and verify both self-contained
-sandbox repositories and synchronized docs, commit/push each repository's own
-`main`, then record the new multi-repository freeze. Only then launch the
+both sandboxes, and docs repository. The correction is still in progress:
+reconcile the new consumer evidence into the shipped documentation, rebuild the
+exact alpha.11 artifact, rebind both self-contained sandbox repositories and
+synchronized docs, then record the new multi-repository freeze. Pushes to the
+sandbox and docs repositories' own `main` branches are deployment triggers and
+remain prohibited during this no-deployment review cycle. Only then launch the
 identical doctrine-complete internal and external Code Reviewer reviews
 simultaneously. Do not deploy, publish to npm, create a GitHub Release, or move
 an existing tag during this cycle.

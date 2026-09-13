@@ -9,10 +9,9 @@ SemVer.
 Discourse-specific compatibility branches such as `d-compat/<YYYY>.<M>` do not
 apply to this Astro package. Allowed Astro and Starlight versions are declared
 independently in `peerDependencies`; tested compatibility is a narrower evidence
-record and must be stated separately. The alpha.10 artifact completed clean
-consumer qualification on September 13, 2026. Alpha.11 changes runtime behavior,
-so that matrix is historical until the exact alpha.11 artifact repeats it:
-Astro 7.3.2 and Starlight 0.42.0 with Astro 7.3.2, both on Node.js 22.22.2.
+record and must be stated separately. The exact alpha.11 package completed clean
+consumer qualification on September 13, 2026: Astro 7.3.2 and Starlight 0.42.0
+with Astro 7.3.2, both on Node.js 22.22.2.
 Starlight 0.41.11 with Astro 7.3.2 was qualified for alpha.3 on September 11,
 2026; it remains peer-eligible, but that historical result is not current
 alpha.11 execution evidence. Other versions admitted by the bounded peer ranges
@@ -27,7 +26,8 @@ The current Milestone 2 candidate is `0.1.0-alpha.11`:
 - `.11` identifies the cross-provider correction that gives Fathom, Plausible,
   GA4, and Matomo the completion-identity behavior already established for
   Umami, and closes readiness when Astro navigation observation is unavailable.
-  It is under the doctrine-complete review and consumer gate.
+  Its clean stock Astro and Starlight consumer gates passed; doctrine-complete
+  review remains open.
 - `.10` identifies the immutable source-tagged Umami same-URL correction. It
   completed its package, sandbox, browser-runtime, and provider-side live gates,
   but the later doctrine-complete readiness working review found the equivalent
@@ -101,9 +101,9 @@ repository-driven sandbox, browser-runtime, and provider-side live gates by
 September 13, 2026. The later doctrine-complete readiness working review found
 cross-provider completion-identity and observer-readiness defects, so those
 earlier results remain historical evidence rather than an RC disposition.
-Alpha.11 is the working correction and must complete its exact review and
-consumer gates. The line may advance to an RC only after those gates close and
-the feature set is believed complete.
+Alpha.11 is the working correction and has completed its clean stock Astro and
+Starlight consumer gates. The line may advance to an RC only after independent
+review closes and the feature set is believed complete.
 
 The package does not currently advertise the `astro-integration` discovery
 keyword because `astro add` invokes a zero-argument default factory and this
