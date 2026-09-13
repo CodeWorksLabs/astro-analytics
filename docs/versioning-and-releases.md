@@ -9,22 +9,30 @@ SemVer.
 Discourse-specific compatibility branches such as `d-compat/<YYYY>.<M>` do not
 apply to this Astro package. Allowed Astro and Starlight versions are declared
 independently in `peerDependencies`; tested compatibility is a narrower evidence
-record and must be stated separately. The current qualified matrix is Astro
-7.3.2 and Starlight 0.42.0 with Astro 7.3.2, both on Node.js 22.22.2.
+record and must be stated separately. The alpha.10 R3 artifact completed clean
+consumer qualification on September 13, 2026. Its current qualified matrix is
+Astro 7.3.2 and Starlight 0.42.0 with Astro 7.3.2, both on Node.js 22.22.2.
 Starlight 0.41.11 with Astro 7.3.2 was qualified for alpha.3 on September 11,
 2026; it remains peer-eligible, but that historical result is not current
-alpha.9 execution evidence. Other versions admitted by the bounded peer ranges
+alpha.10 execution evidence. Other versions admitted by the bounded peer ranges
 are not yet compatibility claims.
 
 ## Current line
 
-The current Milestone 2 candidate is `0.1.0-alpha.9`:
+The current Milestone 2 candidate is `0.1.0-alpha.10`:
 
 - `0.1.0` identifies the first pre-stable feature line.
 - `alpha` states that the package is incomplete and not production-ready.
-- `.9` identifies the source-tagged Umami adapter candidate. It has passed
-  independent review and clean Astro and Starlight consumer qualification but
-  is not yet repository-sandbox or provider-side live-qualified.
+- `.10` identifies the correction for consecutive post-readiness ClientRouter
+  completions at the same URL. Its R4 artifact passed clean consumer
+  qualification and localized documentation closure review. Later
+  documentation-only archives retain only the unchanged-runtime relevance of
+  that evidence; exact source-tag archive installation, repository-driven
+  sandbox deployment, and provider-side live qualification remain pending.
+- `.9` identifies the immutable source-tagged Umami adapter candidate. It
+  passed those gates, but a later full committed review found that URL-only
+  pageview deduplication suppressed genuine same-URL ClientRouter completions.
+  It is superseded and remains unpublished to npm.
 - `.8` identifies the reviewed and live-qualified Matomo adapter candidate;
   its public source tag is `v0.1.0-alpha.8`, while npm publication remains
   unauthorized and absent.
@@ -86,11 +94,11 @@ guard. Removing it requires separate release authorization and review.
 
 Matomo completed independent review, clean Astro and Starlight package-consumer
 qualification, repository-driven sandbox deployment, and provider-side live
-qualification on September 13, 2026. Umami has passed independent review and
-clean Astro and Starlight package-consumer qualification; it still requires
-repository-driven sandbox deployment and provider-side live qualification. The
-line may advance to an RC only after those gates close and the feature set is
-believed complete.
+qualification on September 13, 2026. Umami alpha.9 subsequently completed the
+same gates, but a later full committed review found its same-URL ClientRouter
+deduplication defect. Alpha.10 is the working correction and must repeat the
+applicable gates. The line may advance to an RC only after those gates close and
+the feature set is believed complete.
 
 The package does not currently advertise the `astro-integration` discovery
 keyword because `astro add` invokes a zero-argument default factory and this

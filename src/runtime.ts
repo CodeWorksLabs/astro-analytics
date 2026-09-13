@@ -1890,7 +1890,8 @@ export function createUmamiBootstrapScript(
     let completedUrl;
     let completedReferrer;
     let completedTitle;
-    let lastTrackedUrl;
+    let completionCounter = 0;
+    let lastTrackedCompletion;
     let vendorClient;
     let vendorScript;
     let vendorTrack;
@@ -1999,7 +2000,9 @@ export function createUmamiBootstrapScript(
     const sendPageview = (pageview) => {
       try {
         if (!hasUsableVendor() || lifecycle?.active !== true || pageview === undefined ||
-            pageview.url === lastTrackedUrl) return pageview?.url === lastTrackedUrl;
+            pageview.completion === lastTrackedCompletion) {
+          return pageview?.completion === lastTrackedCompletion;
+        }
         const payload = (properties) => {
           const base = (typeof properties === "object" || typeof properties === "function") && properties !== null
             ? properties
@@ -2007,7 +2010,7 @@ export function createUmamiBootstrapScript(
           return { ...base, url: pageview.url, title: pageview.title, referrer: pageview.referrer };
         };
         if (!callUmami([payload])) return false;
-        lastTrackedUrl = pageview.url;
+        lastTrackedCompletion = pageview.completion;
         return true;
       } catch { return false; }
     };
@@ -2024,14 +2027,19 @@ export function createUmamiBootstrapScript(
       if (typeof href !== "string") return;
       const referrer = observationGap
         ? ""
-        : typeof completedUrl === "string" && completedUrl !== href
+        : typeof completedUrl === "string"
           ? completedUrl
           : completedReferrer ?? readDocumentReferrer();
       completedUrl = href;
       completedReferrer = referrer;
       completedTitle = readTitle();
       if (config.pageviews !== "none") {
-        pendingPageview = Object.freeze({ referrer, title: completedTitle, url: href });
+        pendingPageview = Object.freeze({
+          completion: ++completionCounter,
+          referrer,
+          title: completedTitle,
+          url: href,
+        });
       }
       if (observationGap) {
         observationGap = false;
@@ -2090,7 +2098,7 @@ export function createUmamiBootstrapScript(
         vendorScript = undefined;
         vendorTrack = undefined;
         vendorReady = false;
-        lastTrackedUrl = undefined;
+        lastTrackedCompletion = undefined;
         lifecycleActive = true;
         lifecycle = Object.freeze({ get active() { return lifecycleActive; } });
         const consentPending = config.consentMode === "deferred" || config.consentMode === "external";

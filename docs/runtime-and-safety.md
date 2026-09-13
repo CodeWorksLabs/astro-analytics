@@ -222,6 +222,12 @@ Umami automatic pageviews are disabled through `data-auto-pageview="false"`.
 This requires Umami 3.2.0 or later.
 The adapter calls `umami.track(payloadFactory)` after ordinary-document DOM
 readiness or, when ClientRouter is present, Astro's post-swap page-load signal.
+Once the tracker is ready, each observed ClientRouter completion is a distinct
+pageview, even when two consecutive completions have the same URL.
+Deduplication applies only when the same retained completion is retried through
+matching bootstrap reentry. Completions observed before tracker readiness
+coalesce to the latest confirmed route, which is sent when readiness is proven;
+the adapter does not replay superseded route history.
 The factory preserves Umami's default payload and replaces URL, title, and
 referrer with the completed route context. Tracker load alone never invents a
 completion. Missing or throwing navigation observer installation prevents the

@@ -394,7 +394,7 @@ test("Umami injects without the optional event client", () => {
   assert.match(injected[0] ?? "", /e676c9b4-11e4-4ef1-a4d7-87001773e9f2/);
 });
 
-test("Umami loads its owned tracker and maps Astro pageviews and bounded events", () => {
+test("Umami maps ready same-URL completions and bounded events", () => {
   const harness = createDocumentHarness();
   const context: vm.Context = {
     document: Object.assign(harness.document, {
@@ -466,6 +466,17 @@ test("Umami loads its owned tracker and maps Astro pageviews and bounded events"
     url: "https://example.test/next/",
     title: "Next",
     referrer: "https://example.test/landing/",
+  });
+
+  context.document.title = "Next refreshed";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.equal(calls.length, 4);
+  const repeatedUrlPayload = calls[3]?.[0] as (properties: object) => object;
+  assert.deepEqual(JSON.parse(JSON.stringify(repeatedUrlPayload({ website: "site" }))), {
+    website: "site",
+    url: "https://example.test/next/",
+    title: "Next refreshed",
+    referrer: "https://example.test/next/",
   });
 });
 
@@ -793,15 +804,17 @@ test("Umami delayed readiness gives its pageview and event the same completed ed
   context.location.href = "https://example.test/b";
   context.document.title = "B";
   harness.documentListeners.get("astro:page-load")?.[0]?.();
+  context.document.title = "B refreshed before readiness";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
   const calls = activateUmami(context, harness.appended[0] ?? {});
   context.astroAnalytics.track("after-load");
   const pageview = (calls[0]?.[0] as (properties: object) => object)({ website: "site" });
   const event = (calls[1]?.[0] as (properties: object) => object)({ website: "site" });
   assert.deepEqual(JSON.parse(JSON.stringify(pageview)), {
-    website: "site", url: "https://example.test/b", title: "B", referrer: "https://example.test/a",
+    website: "site", url: "https://example.test/b", title: "B refreshed before readiness", referrer: "https://example.test/b",
   });
   assert.deepEqual(JSON.parse(JSON.stringify(event)), {
-    website: "site", url: "https://example.test/b", title: "B", referrer: "https://example.test/a", name: "after-load",
+    website: "site", url: "https://example.test/b", title: "B refreshed before readiness", referrer: "https://example.test/b", name: "after-load",
   });
 });
 

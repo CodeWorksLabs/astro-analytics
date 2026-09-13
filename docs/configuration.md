@@ -235,7 +235,7 @@ referrer. Later observed navigation restores ordinary virtual-referrer edges.
 
 Immediate consent loads Matomo. Deferred and external modes fail closed without
 creating `_paq` or loading the tracker and report `consent-pending`; runtime
-consent activation is not yet part of alpha.9.
+consent activation is not yet part of alpha.10.
 
 ## Umami
 
@@ -273,9 +273,12 @@ pageview is sent through `umami.track()` after DOM readiness. When Astro's
 ClientRouter is present, the adapter waits for its post-swap `astro:page-load`
 signal for the initial route and every client navigation. Both paths use the
 current URL and title and the known preceding URL as referrer; tracker readiness
-alone never manufactures a route completion.
+alone never manufactures a route completion. Once the tracker is ready, every
+observed completion is sent even when its URL matches the preceding completion.
+Before readiness, completed routes coalesce to the latest confirmed route and
+superseded history is not replayed.
 
-`data-auto-pageview` was introduced by Umami 3.2.0, so alpha.9 requires an
+`data-auto-pageview` was introduced by Umami 3.2.0, so alpha.10 requires an
 Umami 3.2-or-later tracker. Earlier self-hosted trackers are not supported
 because they cannot provide the package's duplicate-pageview guarantee.
 
@@ -294,4 +297,4 @@ pageviews. Umami-specific validation
 limits names to 50 characters, data to 50 properties, strings to 500 characters,
 and numbers to four decimal places. The shared package's stricter primitive-only
 event shape remains in force, so nested Umami event objects and arrays are not
-accepted in alpha.9.
+accepted in alpha.10.

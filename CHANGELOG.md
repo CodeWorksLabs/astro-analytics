@@ -7,6 +7,19 @@ release claim.
 
 ## Unreleased
 
+## 0.1.0-alpha.10 - Candidate
+
+- Once Umami is ready, track each completed Astro ClientRouter lifecycle as a
+  distinct pageview, including consecutive completions whose URLs are
+  identical, while retaining completion-identity deduplication for matching
+  bootstrap reentry. Completions observed before readiness continue to
+  coalesce to the latest confirmed route.
+- Preserve the updated title and completed-route context for same-URL
+  navigations instead of treating URL equality as proof that the lifecycle was
+  already sent.
+- Attribute a same-URL completion to the immediately preceding completed URL,
+  retaining an exact virtual route edge rather than an older referrer.
+
 ## 0.1.0-alpha.9 - Candidate
 
 - Add strict Umami Cloud and self-hosted configuration using a website UUID,

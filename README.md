@@ -1,8 +1,8 @@
 # Analytics for Astro
 
 `@codeworkslabs/astro-analytics` is an experimental reusable analytics
-integration for Astro. Its source is public. The current version is the
-source-tagged `0.1.0-alpha.9` candidate and is not published to npm.
+integration for Astro. Its source is public. The current source candidate is
+`0.1.0-alpha.10` and is not published to npm.
 
 > [!IMPORTANT]
 > Milestone 2 includes real Fathom, Plausible, Google Analytics 4, Matomo, and
@@ -81,7 +81,9 @@ last completed route, but no automatic pageview is sent.
 
 Umami loads its public tracker with automatic pageviews disabled and sends
 an ordinary document's initial pageview after DOM readiness and ClientRouter
-pageviews after Astro's page-load completion signal. Pageviews and custom events
+pageviews after Astro's page-load completion signal. Once the tracker is ready,
+consecutive completions at the same URL remain distinct; before readiness,
+completed routes coalesce to the latest confirmed route. Pageviews and custom events
 use payload factories so URL, title, and referrer always come from the same
 completed Astro route, including `pageviews: "none"`. At most 50 custom
 properties are forwarded. Umami's 50-character event-name, 500-character
