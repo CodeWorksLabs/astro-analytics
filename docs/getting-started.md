@@ -2,8 +2,8 @@
 
 ## Status
 
-Analytics for Astro has a public source repository. The current working version
-is an unreleased `0.1.0-alpha.8` candidate; there is no supported npm installation yet.
+Analytics for Astro has a public source repository. The current version is the
+source-tagged `0.1.0-alpha.8` candidate; there is no supported npm installation yet.
 
 Milestone 2 implements Fathom, Plausible, Google Analytics 4, and Matomo pageviews and
 custom events. No queue or runtime consent activation API is included yet.

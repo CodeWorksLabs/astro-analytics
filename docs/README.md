@@ -1,6 +1,7 @@
 # Analytics for Astro documentation
 
-These documents describe the public-source, unreleased `0.1.0-alpha.8` Milestone 2 candidate of
+These documents describe the public-source, source-tagged, npm-unpublished
+`0.1.0-alpha.8` Milestone 2 candidate of
 `@codeworkslabs/astro-analytics`.
 
 Milestone 2 provides real Fathom, Plausible, Google Analytics 4, and Matomo adapters for

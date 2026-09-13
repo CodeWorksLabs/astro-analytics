@@ -7,6 +7,8 @@ release claim.
 
 ## Unreleased
 
+## 0.1.0-alpha.8 - Candidate
+
 - Add strict Matomo Cloud and self-hosted configuration using an exact public
   tracker endpoint, site ID, optional script URL, pageview mode, and consent mode.
 - Add a package-owned Matomo `_paq` runtime with Astro-lifecycle pageviews,
