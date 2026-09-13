@@ -1565,3 +1565,44 @@ entries, and the recoverable downloaded PEM are obsolete credential residue.
 Their removal is part of the bounded repository correction, not product
 development. No credential value was committed: current-tree, Git-history, and
 GitHub code searches found no PEM filename or private-key material.
+
+### Correction completion — 2026-09-12
+
+The public repository correction is complete. Integrated `main` was published
+at `b01bb82`, the obsolete local and remote `codex/pre-rc` branches were
+deleted, and annotated tag `v0.1.0-alpha.7` was published at exact product
+commit `454893359f8588a71d35d51d1a5e0d16bf355c63`. No GitHub Release or npm
+publication was created.
+
+The Astro sandbox correction is published through commits `853a3e2`,
+`dd51db6`, and checkpoint commit `d1c7379`. The Stock Starlight correction is
+published through commits `363fd11`, `56ef789`, and checkpoint commit
+`a05d182`. Both active workflows now check out annotated public tag
+`v0.1.0-alpha.7`, verify that it resolves to exact commit `4548933`, pack on
+the Linux runner, and run clean install, production audit, consumer build, and
+Wrangler dry-run. They contain no GitHub App credential reference and no
+non-dry-run deployment command.
+
+The first two remote runs exposed and rejected a nonportable fixed tarball hash
+caused by Windows CRLF versus Linux LF packing. The replacement tag-plus-commit
+identity is stable across those environments. GitHub Actions runs
+`34731822799` and `34731828128` passed the corrected workflow; final
+checkpoint-triggered runs `34732050887` and `34732050773` also passed every
+step. Local sequential verification independently passed for both consumers;
+their production audits found zero vulnerabilities.
+
+These pushes did not create a Cloudflare version. Existing live Worker versions
+remain `d1f95b77-fb8f-4bcf-86fe-eb36452fc7a0` for Astro and
+`64d3e206-5b06-4b95-8e96-d06dc8bf75d3` for Stock Starlight; both public roots
+returned HTTP 200. No Cloudflare configuration or manual deployment occurred.
+
+Credential retirement is complete. Both `CWL_BUILD_APP_ID` and
+`CWL_BUILD_APP_PRIVATE_KEY` were deleted from both sandbox repositories. GitHub
+App `CodeWorksLabs Sandbox Builds` and installation `161215866` were deleted,
+invalidating both private keys; the App endpoint now returns 404 and the
+organization has no matching installation. The matching recycled PEM and its
+Recycle Bin metadata were permanently deleted and verified absent.
+
+Astro Analytics may resume ordinary development against public `main`. Future
+GitHub release, permission, Actions-architecture, or Cloudflare operations stay
+outside the development lane unless assigned as an exact bounded action.
