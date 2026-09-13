@@ -2101,3 +2101,291 @@ the same fan-out events; the Fathom profile result does not qualify or
 disqualify Matomo. Product documentation now treats Matomo as implemented and
 live-qualified. Umami remains the only accepted first-stable provider not yet
 implemented.
+
+## Umami alpha.9 R1 implementation and review freeze — 2026-09-13
+
+The working `0.1.0-alpha.9` candidate adds the fifth accepted first-stable
+provider, Umami, for Umami Cloud and self-hosted Umami 3.2 or later. The
+configuration requires a public website UUID and HTTPS tracker URL, accepts an
+optional HTTPS collection host, disables vendor automatic pageviews, sends
+Astro-owned pageviews with current URL/title/referrer, maps package events to
+`umami.track(name, data)`, and enforces Umami's provider-specific event limits.
+Deferred and external consent fail closed without a script or global.
+
+The runtime accepts only the exact tracker assigned by the package-owned script
+during its own execution, verifies the retained client and `track` function on
+every use, preserves unrelated replacement state, supports clean failure retry,
+deduplicates matching pre-load reentry, waits for prerender activation, and
+recovers navigation observation only at the next observed Astro page-load.
+Documentation, configuration tests, type-level examples, and runtime tests were
+updated in the same working candidate.
+
+The product gate passes strict TypeScript checking and all 130 tests. Both full
+and production-only npm audits report zero vulnerabilities, and `git diff
+--check` reports no errors. The fresh R1 artifact is:
+
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-alpha9-r1-837e8413dffb46369fc6d99cf31d4b38\codeworkslabs-astro-analytics-0.1.0-alpha.9.tgz`
+
+It contains 19 intended entries, is 43,841 bytes compressed / 212,954 bytes
+unpacked, has SHA-256
+`7B0AAD247B939CC7B6F8649FEEEC471CA0B0D235FBAD14E862D6F4C41255FD6D`, npm SHA-1
+`0a26cfeb113820ce94bddfd6fffb69c2bc83b181`, and integrity
+`sha512-CifRIvetkhH6oEK520i1v6e2H22ooW42HV3WUdLlsDJIW4mZ9m8IxLaoH8b51N20fxVsH56Y8IQx8Dp1HEKmjQ==`.
+
+Fresh isolated R1 consumers are under
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-consumers-alpha9-r1-e2337bda8798481db8b888bd599412af`.
+Both install exact version `0.1.0-alpha.9`, report zero production dependency
+vulnerabilities, complete production builds, emit the Umami runtime, and pass
+Wrangler deployment dry-runs without uploading:
+
+- stock Astro: lock SHA-256
+  `65261A5218BC95C81B2FD9EFFBEBFE82C120F2B872CA5EA8408843BAC94DC8A4`;
+  emitted `dist/_astro/page.DjbPHnq4.js`, SHA-256
+  `95DA9C1F42A5EE679F7787F6BC08B6D6466B267150F42C50F66A6A7B37734325`;
+- stock Starlight: lock SHA-256
+  `A06D6E246B4DC10596937AE727319F684A4CF2B50073F83D767C6703E50F9EA0`;
+  emitted `dist/_astro/page.BUIK7--2.js`, SHA-256
+  `B77C30433E429365F693EAE53F6C6B313A2E938B7366018480D6CDA2CC57C5D2`.
+
+Implementation is frozen for independent review. The exact source identity is
+public `main` HEAD `9641c5caf150e8b0df5d80c3a03a1e0b687ac782`, HEAD tree
+`c02ff110687a5c57d72aa3000448ab818929616c`, product diff SHA-1
+`d7badaa2ae4eeef75dcaf97a47864d5b48b234c6` (byte-preserving binary Git diff excluding this
+checkpoint), package-lock SHA-256
+`ACDC776375D22BAEC00A4B09AA9B8C491FC5B65E1072243B7306D420155538BC`, runtime
+SHA-256 `50AC2448488C809838477F8E80554D85090C74DFB5324213ED6306D9BADB9E30`, and
+integration-test SHA-256
+`8C9A96087879ED9A6B4615B5E7AD09B7659FD5E5068D66FA5570C16BEEE27548`.
+There are 20 modified tracked files, zero staged files, and zero untracked
+files. No commit, push, tag, GitHub Release, npm publication, canonical sandbox
+mutation, provider administration, documentation publication, or deployment
+occurred while producing or validating R1.
+
+## Umami alpha.9 R1 review block and R2 correction freeze — 2026-09-13
+
+Code Reviewer completed composite review
+`AFA-UMAMI-ALPHA9-20260913-R1` with a census of 0 P0, 2 P1, 2 P2, and 0 P3.
+Its disposition was `INTERNAL CODE REVIEW BLOCK` based on:
+
+- U9-01 P1: custom events used Umami's private navigation state and could be
+  attributed to a stale route/referrer after browser-history traversal or
+  delayed readiness;
+- U9-02 P1: assignment provenance did not revalidate configured script source,
+  website, host, automatic-pageview setting, executable mode, or DOM binding;
+- U9-03 P2: initial readiness could send before the documented Astro page-load
+  completion boundary;
+- U9-04 P2: a synchronous pageview exception consumed the pending record and
+  matching reentry could not retry it.
+
+All four findings were accepted and corrected coherently. Pageviews and events
+now use the same completed Astro URL/title/referrer edge; event-only mode observes
+Astro completions without sending pageviews. Initial tracking waits for the first
+Astro page-load signal. The exact package script configuration and DOM identity
+are verified at assignment, load, and every later use. A synchronously rejected
+pageview remains pending for bounded matching-bootstrap retry. Documentation was
+updated to state these contracts accurately.
+
+The replacement product gate passes strict TypeScript checking and all 135
+tests. Full and production-only npm audits report zero vulnerabilities, and
+`git diff --check` reports no errors. New regression evidence covers each R1
+trigger and closure property, including forward/back traversal, delayed and
+in-flight readiness, event-only context, source/site/host/auto-pageview/type/DOM
+substitution, post-load restoration, initial completion timing, synchronous
+retry, stale generations, prerender, and observation-gap recovery.
+
+The fresh R2 artifact is:
+
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-alpha9-r2-f0c29c54d23041c1a04ce9df769cdb0e\codeworkslabs-astro-analytics-0.1.0-alpha.9.tgz`
+
+It contains 19 intended entries, is 44,835 bytes compressed / 217,981 bytes
+unpacked, has SHA-256
+`3F360F85F1F4DFD8C18AED948A82B5C76EA4E3381AB2A520F0B8916A2CCE6ACF`, npm SHA-1
+`db964c137c35ea1e31fd26838578d36e87a77bd1`, and integrity
+`sha512-KoDJlPmN+j2jvdtOSu8mIFVba+iBE3h//73jvNB8RK5N5gOgEEiVaKyCs7I3dXK1nNN9KmJ28Pkp3GItrRZMuw==`.
+
+Fresh isolated R2 consumers are under
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-consumers-alpha9-r2-1828fef91c6c435cb9bbd47133d12410`.
+Both install exact version `0.1.0-alpha.9`, report zero production dependency
+vulnerabilities, complete production builds, emit the corrected Umami runtime,
+and pass Wrangler deployment dry-runs without uploading:
+
+- stock Astro: package SHA-256
+  `3722F4FD00C6F23CBE56D2AC08B43773A9A626C3AC442C2DFEE415848057BCA4`,
+  lock SHA-256
+  `388B5C820AE1416436C6F5E9557DA6A83157BEAAB0AD8F9AEAFA7FBE5007AA04`,
+  emitted `dist/_astro/page.td-qhlHX.js`, SHA-256
+  `596E0CB23875ACB0E40281DE98B63654B94662F5321B8BE7D18B2A77AE4E2BF9`;
+- stock Starlight: package SHA-256
+  `066C03F565E8C757C840E8E4C1477664CBC03D289FBC5EF8DE36ABEF487B01AB`,
+  lock SHA-256
+  `F6327DA81ED3C6EEB0F233945CA447AFA10A299B0F3597DB0A81C69F2E2607CD`,
+  emitted `dist/_astro/page.CMHS04-I.js`, SHA-256
+  `4FA0AD1FDD1F6001633D52D690FD7EE2BBE9609A58D8E47667DD465858D8CDF8`.
+
+R2 is frozen for correction closure. The exact source identity is public `main`
+HEAD `9641c5caf150e8b0df5d80c3a03a1e0b687ac782`, HEAD tree
+`c02ff110687a5c57d72aa3000448ab818929616c`, product diff SHA-1
+`9a973474a106e25c4037891bc330089b421aa96f` (byte-preserving binary Git diff
+excluding this checkpoint), package-lock SHA-256
+`ACDC776375D22BAEC00A4B09AA9B8C491FC5B65E1072243B7306D420155538BC`, runtime
+SHA-256 `0B5A4134A4B870E75697E65E1924FF31F37F17D4DEFE6063626BB03DCE961216`, and
+integration-test SHA-256
+`1E12744FDE3C2B271931F340017B040E1DA28E975FA614BA450D873A4B53E080`.
+There are 20 modified tracked product files, zero staged files, and zero
+untracked files; this checkpoint is the declared excluded record. No commit,
+push, tag, GitHub Release, npm publication, canonical sandbox mutation, provider
+administration, documentation publication, or deployment occurred while
+correcting and validating R2.
+
+## Umami alpha.9 R2 review block and R3 correction freeze — 2026-09-13
+
+The visible internal review found one P2 race: if route A completed before the
+tracker became ready and `location.href` then changed for an uncompleted route B,
+the readiness flush discarded A's confirmed pending pageview. Code Reviewer
+completed composite review `AFA-UMAMI-ALPHA9-20260913-R2` with 0 P0, 2 P1, 0 P2,
+and 0 P3. It independently established that stock non-ClientRouter Astro and
+Starlight consumers do not emit `astro:page-load`, leaving Umami permanently not
+ready, and that Astro ClientRouter's ordinary head swap removes the dynamic
+tracker element, causing the strict connected-DOM proof to reject the genuine
+load-proven tracker. R2 is blocked and superseded.
+
+All three findings were corrected as one lifecycle batch. An ordinary MPA now
+establishes its initial completed route at DOM readiness, while a page containing
+Astro's ClientRouter marker waits for `astro:page-load` on the initial route and
+each client navigation. The original exact tracker element remains acceptable
+after legitimate head disposal only while its immutable object identity,
+ownerDocument, source, executable settings, package data attributes, load-proven
+client, and track method remain exact and no replacement owns its DOM ID. A
+foreign binding still closes readiness. A confirmed pending pageview now survives
+an uncompleted URL change and is superseded only by a later observed completion.
+Documentation was reconciled to these MPA and ClientRouter contracts.
+
+The R3 product gate passes strict TypeScript checking and all 140 tests. Full and
+production-only npm audits report zero vulnerabilities, and `git diff --check`
+reports no errors. New direct regression evidence covers ordinary loading and
+already-ready documents without a synthetic Astro event, ClientRouter initial
+timing, normal head disposal, foreign replacement binding, delayed tracker load
+crossing a head swap, subsequent and back navigation, events-only readiness, and
+retention of the last confirmed route during an in-flight transition.
+
+The fresh R3 artifact is:
+
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-alpha9-r3-a43593af44e44dedbc6cb21a04acd87f\codeworkslabs-astro-analytics-0.1.0-alpha.9.tgz`
+
+It contains 19 intended entries, is 45,307 bytes compressed / 219,600 bytes
+unpacked, has SHA-256
+`C11579E99582CCDB2925A6033B260ADB245D5992015F02FC4542CB3476A5CBFF`, npm SHA-1
+`1df30e562556a9c534d41a0aa0617c7200a50f03`, and integrity
+`sha512-pbK632fySEXFRtVu2a5N/PnWZhLtKF84bsI4+jshiW7H9pUQcWBEEOSBrprCW0P0TDd2IKjHMGyC8u8Q/SJc/w==`.
+
+Fresh isolated R3 consumers are under
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-consumers-alpha9-r3-7b671c4f8f084da982e4133a5224d313`.
+Both install exact version `0.1.0-alpha.9` with installed runtime SHA-256
+`4DC88354F6C562FC42A1BA64889819958C36FC966706038FC55C1B103F598400`, report zero
+production dependency vulnerabilities, complete production builds, and pass
+Wrangler deployment dry-runs without uploading:
+
+- stock Astro: lock SHA-256
+  `937B75F6530D31A497D016AC96A47E55B9A00CE7844B38180BFF523E48C2E1A5`;
+  emitted `dist/_astro/page.5s7CmLTQ.js`, SHA-256
+  `3364394826B3A496C4319BC22914DCE7BEA70E6FCC5B7D30AE766158C7E529E4`;
+- stock Starlight: lock SHA-256
+  `CA66A3830518537E602133D75878E54B99F04871A63EE2A8E198628679CB4E97`;
+  emitted `dist/_astro/page.DFWhsHy_.js`, SHA-256
+  `074055F14CFA946695DACF727BF664539E16ED9A2BAC73457EE979161B3F2680`.
+
+R3 is frozen for replacement review. The exact source identity is public `main`
+HEAD `9641c5caf150e8b0df5d80c3a03a1e0b687ac782`, HEAD tree
+`c02ff110687a5c57d72aa3000448ab818929616c`, product diff SHA-1
+`0F5DF7C13266D61D9093E077ED71E1C783DD1351` (byte-preserving binary Git diff
+excluding this checkpoint), package-lock SHA-256
+`ACDC776375D22BAEC00A4B09AA9B8C491FC5B65E1072243B7306D420155538BC`, runtime
+SHA-256 `4DC88354F6C562FC42A1BA64889819958C36FC966706038FC55C1B103F598400`, and
+integration-test SHA-256
+`0872361DB589DA71FABB5F432F3745E28038A81164FE68BD5DF0BF48D7C85A03`.
+There are 20 modified tracked product files, zero staged files, and zero
+untracked files; this checkpoint is the declared excluded record. No commit,
+push, tag, GitHub Release, npm publication, canonical sandbox mutation, provider
+administration, documentation publication, or deployment occurred while
+correcting and validating R3.
+
+## Umami alpha.9 R3 pass and R4 test-oracle correction — 2026-09-13
+
+Code Reviewer completed composite review `AFA-UMAMI-ALPHA9-20260913-R3` with a
+grouped census of 0 P0, 0 P1, 0 P2, and 1 P3 and disposition
+`INTERNAL CODE REVIEW PASS WITH P2/P3 FINDINGS`. All four R1 findings, both R2
+P1 findings, and the visible internal pending-pageview P2 were independently
+closed against the exact source, artifact, both emitted consumers, the official
+Umami tracker, and actual installed Astro head-swap semantics. All six composite
+sub-gates passed. The sole P3, U9R3-01, found that a detached-script entry in the
+pre-execution negative table appeared to prove rejection but remained not-ready
+only because the test had not established a completed route; unchanged detachment
+is intentionally accepted for ClientRouter head disposal.
+
+The P3 test oracle was corrected without changing any shipped package member.
+The detached-original case was removed from the substitution-negative table,
+where it conflicted with the accepted lifecycle contract. Every remaining true
+substitution case now records an otherwise-valid completed route before mutation
+and activation, so its `adapter-not-loaded` assertion would fail if rejection
+were absent. The separate head-disposal and delayed-load tests continue to prove
+intentional detached-original acceptance. Strict TypeScript checking and all 140
+tests pass, and `git diff --check` reports no errors.
+
+R4 is frozen for the applicable localized closure review. The package archive is
+byte-identical to reviewed R3 because tests are not shipped:
+
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-alpha9-r4-d772baaf269246e7aa171b0fa2b7124a\codeworkslabs-astro-analytics-0.1.0-alpha.9.tgz`
+
+It remains 45,307 bytes with SHA-256
+`C11579E99582CCDB2925A6033B260ADB245D5992015F02FC4542CB3476A5CBFF`; therefore
+the exact R3 installed consumers, locks, configurations, Wrangler bindings, and
+emitted bundles remain the applicable unchanged artifact-consumer evidence.
+The R4 product diff SHA-1 is
+`E9C8F3DD7F7DB2F031A16696E13D85F11B39E647` (byte-preserving binary Git diff
+excluding this checkpoint), runtime SHA-256 remains
+`4DC88354F6C562FC42A1BA64889819958C36FC966706038FC55C1B103F598400`, and
+integration-test SHA-256 is
+`912B31B2E8292913E7728BFD396F2C45AECF438D863C53C7ACBEC2B7C85521CB`.
+No product changes are queued. There are 20 modified tracked product files, zero
+staged files, and zero untracked files; this checkpoint remains excluded. No
+commit, push, tag, GitHub Release, npm publication, canonical sandbox mutation,
+provider administration, documentation publication, or deployment occurred.
+
+## Umami alpha.9 R4 review closure — 2026-09-13
+
+The localized independent Code Reviewer closure `AFA-UMAMI-ALPHA9-20260913-R4`
+closed U9R3-01 with a census of 0 P0, 0 P1, 0 P2, and 0 P3 and disposition
+`INTERNAL CODE REVIEW PASS`. It verified that the revised mutation table now
+establishes route completion before each genuine substitution, that every
+negative fails under a counterfactual false-acceptance runtime, and that the
+separate legitimate-detachment and delayed-load positives remain intact. Its
+fresh gates passed TypeScript checking, all 140 tests, and `git diff --check`.
+
+The separate visible internal `codex review --uncommitted` also completed with
+no actionable correctness defects. It independently reported consistent Umami
+wiring across configuration, runtime injection, event typing, documentation,
+and tests; TypeScript checking, all 140 tests, and diff validation passed.
+
+The reviewed R4 source identity remains the product diff SHA-1
+`E9C8F3DD7F7DB2F031A16696E13D85F11B39E647`, runtime SHA-256
+`4DC88354F6C562FC42A1BA64889819958C36FC966706038FC55C1B103F598400`,
+integration-test SHA-256
+`912B31B2E8292913E7728BFD396F2C45AECF438D863C53C7ACBEC2B7C85521CB`, and
+byte-identical R4 artifact SHA-256
+`C11579E99582CCDB2925A6033B260ADB245D5992015F02FC4542CB3476A5CBFF`.
+
+The next authorized phase is to commit the reviewed product and checkpoint to
+public `main`, create and push annotated tag `v0.1.0-alpha.9`, obtain the two
+public Umami website configurations from Analytics Tools, upgrade and qualify
+the two canonical repository-driven sandboxes, and then reconcile and publish
+the documentation. npm publication and a GitHub Release remain outside the
+current authorization.
+
+Immediately before the source commit/tag, four release-status passages were
+reconciled from pre-gate wording (`working` / `untagged` / review still needed)
+to the evidence above: source-tagged alpha.9, independent review and clean
+consumer qualification complete, repository-sandbox and provider-side live
+qualification still pending. This documentation-only reconciliation did not
+change any shipped package member or test. The full `npm run verify` gate again
+passed all 140 tests and strict TypeScript checking, and `git diff --check`
+again passed. The R4 artifact and runtime hashes above remain exact.

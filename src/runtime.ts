@@ -3,6 +3,7 @@ export const FATHOM_SCRIPT_ID = "codeworkslabs-astro-analytics-fathom";
 export const PLAUSIBLE_SCRIPT_ID = "codeworkslabs-astro-analytics-plausible";
 export const GOOGLE_ANALYTICS_SCRIPT_ID = "codeworkslabs-astro-analytics-google-analytics";
 export const MATOMO_SCRIPT_ID = "codeworkslabs-astro-analytics-matomo";
+export const UMAMI_SCRIPT_ID = "codeworkslabs-astro-analytics-umami";
 
 export interface AnalyticsRuntimeOptions {
   events: boolean;
@@ -56,6 +57,16 @@ export interface MatomoRuntimeOptions {
   scriptSrc: string;
   siteId: string;
   trackerUrl: string;
+}
+
+export interface UmamiRuntimeOptions {
+  consentMode?: "immediate" | "deferred" | "external" | undefined;
+  events: boolean;
+  hostUrl?: string | undefined;
+  pageviews: "provider" | "astro" | "none";
+  runtimeToken: string;
+  scriptSrc: string;
+  websiteId: string;
 }
 
 export function createBootstrapScript(
@@ -1824,6 +1835,453 @@ export function createMatomoBootstrapScript(
         Reflect.apply(Reflect.get(script, "addEventListener"), script, ["error", cleanup, { once: true }]);
         Reflect.apply(Reflect.get(head, "appendChild"), head, [script]);
       } catch { cleanup(); }
+    };
+    const coordinator = Object.freeze({ run, runtimeToken: config.runtimeToken });
+    if (Reflect.defineProperty(documentValue, coordinatorKey, {
+      configurable: false, value: coordinator, writable: false
+    }) !== true || Reflect.get(documentValue, coordinatorKey) !== coordinator) return;
+    Reflect.apply(run, coordinator, [config]);
+  } catch {
+    // Provider failure must not prevent the page from rendering.
+  }
+})();`;
+}
+
+export function createUmamiBootstrapScript(
+  options: UmamiRuntimeOptions,
+): string {
+  const serializedOptions = JSON.stringify(options);
+  return `(() => {
+  "use strict";
+  const config = ${serializedOptions};
+  const brand = ${JSON.stringify(RUNTIME_CLIENT_BRAND)};
+  const scriptId = ${JSON.stringify(UMAMI_SCRIPT_ID)};
+  try {
+    const root = globalThis;
+    const documentValue = Reflect.get(root, "document");
+    if ((typeof documentValue !== "object" && typeof documentValue !== "function") || documentValue === null) return;
+    const symbolValue = Reflect.get(root, "Symbol");
+    if ((typeof symbolValue !== "object" && typeof symbolValue !== "function") || symbolValue === null) return;
+    const symbolFor = Reflect.get(symbolValue, "for");
+    if (typeof symbolFor !== "function") return;
+    const coordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:umami:v1"]);
+    if (typeof coordinatorKey !== "symbol") return;
+    try {
+      const existingCoordinator = Reflect.get(documentValue, coordinatorKey);
+      if ((typeof existingCoordinator === "object" || typeof existingCoordinator === "function") && existingCoordinator !== null &&
+          Reflect.get(existingCoordinator, "runtimeToken") === config.runtimeToken) {
+        const keys = Reflect.ownKeys(existingCoordinator);
+        const existingRun = Reflect.get(existingCoordinator, "run");
+        if (keys.length === 2 && keys.includes("run") && keys.includes("runtimeToken") && typeof existingRun === "function") {
+          Reflect.apply(existingRun, existingCoordinator, [config]);
+        }
+        return;
+      }
+    } catch { return; }
+
+    let activeConfig;
+    let activeGeneration;
+    let generationCounter = 0;
+    let handler;
+    let lifecycle;
+    let observerInstalled = false;
+    let observationGap = false;
+    let pendingPageview;
+    let completedUrl;
+    let completedReferrer;
+    let completedTitle;
+    let lastTrackedUrl;
+    let vendorClient;
+    let vendorScript;
+    let vendorTrack;
+    let vendorReady = false;
+
+    const sameConfig = (value) => {
+      try {
+        return (typeof value === "object" || typeof value === "function") && value !== null &&
+          Reflect.get(value, "consentMode") === config.consentMode &&
+          Reflect.get(value, "events") === config.events &&
+          Reflect.get(value, "hostUrl") === config.hostUrl &&
+          Reflect.get(value, "pageviews") === config.pageviews &&
+          Reflect.get(value, "runtimeToken") === config.runtimeToken &&
+          Reflect.get(value, "scriptSrc") === config.scriptSrc &&
+          Reflect.get(value, "websiteId") === config.websiteId;
+      } catch { return false; }
+    };
+    const readHref = () => {
+      try {
+        const href = Reflect.get(Reflect.get(root, "location"), "href");
+        return typeof href === "string" ? href : undefined;
+      } catch { return undefined; }
+    };
+    const readTitle = () => {
+      try {
+        const title = Reflect.get(documentValue, "title");
+        return typeof title === "string" ? title : "";
+      } catch { return ""; }
+    };
+    const readDocumentReferrer = () => {
+      try {
+        const referrer = Reflect.get(documentValue, "referrer");
+        return typeof referrer === "string" ? referrer : "";
+      } catch { return ""; }
+    };
+    const isPrerendering = () => {
+      try { return Reflect.get(documentValue, "prerendering") === true; } catch { return false; }
+    };
+    const hasClientRouter = () => {
+      try {
+        const querySelector = Reflect.get(documentValue, "querySelector");
+        return typeof querySelector === "function" &&
+          Reflect.apply(querySelector, documentValue, ['[name="astro-view-transitions-enabled"]']) !== null;
+      } catch { return true; }
+    };
+    const registerHandler = () => {
+      if (!config.events || handler === undefined) return;
+      try {
+        const clientCoordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:client-coordinator:v2"]);
+        if (typeof clientCoordinatorKey !== "symbol") return;
+        const clientCoordinator = Reflect.get(root, clientCoordinatorKey);
+        const register = (typeof clientCoordinator === "object" || typeof clientCoordinator === "function") && clientCoordinator !== null
+          ? Reflect.get(clientCoordinator, "register")
+          : undefined;
+        if (typeof register !== "function" || Reflect.get(clientCoordinator, "runtimeToken") !== config.runtimeToken) return;
+        Reflect.apply(register, clientCoordinator, ["umami", handler, config.runtimeToken]);
+      } catch {}
+    };
+    const matchesConfiguredScript = () => {
+      try {
+        const script = vendorScript;
+        if ((typeof script !== "object" && typeof script !== "function") || script === null ||
+            Reflect.get(script, "ownerDocument") !== documentValue ||
+            Reflect.get(script, "id") !== scriptId ||
+            Reflect.get(script, "tagName") !== "SCRIPT" ||
+            Reflect.get(script, "src") !== config.scriptSrc ||
+            Reflect.get(script, "async") !== true ||
+            Reflect.get(script, "defer") !== true ||
+            Reflect.get(script, "noModule") !== false ||
+            Reflect.get(script, "type") !== "") return false;
+        const getElementById = Reflect.get(documentValue, "getElementById");
+        const getAttribute = Reflect.get(script, "getAttribute");
+        const getAttributeNames = Reflect.get(script, "getAttributeNames");
+        if (typeof getElementById !== "function" || typeof getAttribute !== "function" ||
+            typeof getAttributeNames !== "function" ||
+            Reflect.apply(getAttribute, script, ["data-auto-pageview"]) !== "false" ||
+            Reflect.apply(getAttribute, script, ["data-cwl-astro-analytics"]) !== "umami-v1" ||
+            Reflect.apply(getAttribute, script, ["data-website-id"]) !== config.websiteId ||
+            Reflect.apply(getAttribute, script, ["data-host-url"]) !==
+              (typeof config.hostUrl === "string" ? config.hostUrl : null)) return false;
+        const connected = Reflect.get(script, "isConnected") === true;
+        const boundScript = Reflect.apply(getElementById, documentValue, [scriptId]);
+        if (connected ? boundScript !== script : boundScript !== null) return false;
+        const names = Reflect.apply(getAttributeNames, script, []);
+        if (!Array.isArray(names)) return false;
+        const dataNames = names.filter((name) => typeof name === "string" && name.startsWith("data-"));
+        const expectedNames = ["data-auto-pageview", "data-cwl-astro-analytics", "data-website-id"];
+        if (typeof config.hostUrl === "string") expectedNames.push("data-host-url");
+        return dataNames.length === expectedNames.length &&
+          expectedNames.every((name) => dataNames.includes(name));
+      } catch { return false; }
+    };
+    const hasUsableVendor = () => {
+      try {
+        const current = Reflect.get(root, "umami");
+        return vendorReady && matchesConfiguredScript() && current === vendorClient &&
+          (typeof current === "object" || typeof current === "function") && current !== null &&
+          Reflect.get(current, "track") === vendorTrack && typeof vendorTrack === "function";
+      } catch { return false; }
+    };
+    const callUmami = (args) => {
+      if (!hasUsableVendor()) return false;
+      Reflect.apply(vendorTrack, vendorClient, args);
+      return true;
+    };
+    const sendPageview = (pageview) => {
+      try {
+        if (!hasUsableVendor() || lifecycle?.active !== true || pageview === undefined ||
+            pageview.url === lastTrackedUrl) return pageview?.url === lastTrackedUrl;
+        const payload = (properties) => {
+          const base = (typeof properties === "object" || typeof properties === "function") && properties !== null
+            ? properties
+            : {};
+          return { ...base, url: pageview.url, title: pageview.title, referrer: pageview.referrer };
+        };
+        if (!callUmami([payload])) return false;
+        lastTrackedUrl = pageview.url;
+        return true;
+      } catch { return false; }
+    };
+    const flushPageview = () => {
+      if (lifecycle?.active !== true || isPrerendering()) return;
+      const href = readHref();
+      const pageview = pendingPageview;
+      if (pageview === undefined) return;
+      if (pageview.url !== href) return;
+      if (sendPageview(pageview)) pendingPageview = undefined;
+    };
+    const recordPageLoad = () => {
+      const href = readHref();
+      if (typeof href !== "string") return;
+      const referrer = observationGap
+        ? ""
+        : typeof completedUrl === "string" && completedUrl !== href
+          ? completedUrl
+          : completedReferrer ?? readDocumentReferrer();
+      completedUrl = href;
+      completedReferrer = referrer;
+      completedTitle = readTitle();
+      if (config.pageviews !== "none") {
+        pendingPageview = Object.freeze({ referrer, title: completedTitle, url: href });
+      }
+      if (observationGap) {
+        observationGap = false;
+        try { run(config); } catch {}
+        return;
+      }
+      if (vendorReady && lifecycle?.active === true && !isPrerendering()) flushPageview();
+    };
+    const recordInitialDocument = () => {
+      if (typeof completedUrl !== "string") recordPageLoad();
+    };
+    const ensureObserver = () => {
+      if (config.pageviews === "none" && !config.events) return true;
+      if (observerInstalled) return !observationGap;
+      try {
+        const addEventListener = Reflect.get(documentValue, "addEventListener");
+        if (typeof addEventListener !== "function") {
+          observationGap = true;
+          return false;
+        }
+        Reflect.apply(addEventListener, documentValue, ["astro:page-load", recordPageLoad]);
+        if (!hasClientRouter()) {
+          const readyState = Reflect.get(documentValue, "readyState");
+          if (readyState === "interactive" || readyState === "complete") {
+            recordInitialDocument();
+          } else {
+            Reflect.apply(addEventListener, documentValue, ["DOMContentLoaded", recordInitialDocument, { once: true }]);
+          }
+        }
+        observerInstalled = true;
+        return !observationGap;
+      } catch {
+        observationGap = true;
+        return false;
+      }
+    };
+
+    const run = (nextConfig) => {
+      let cleanup;
+      let generation;
+      let lifecycleActive = false;
+      try {
+        if (!sameConfig(nextConfig)) return;
+        if (activeConfig !== undefined) {
+          if (lifecycle?.active === true) {
+            registerHandler();
+            if (vendorReady && !isPrerendering()) flushPageview();
+            return;
+          }
+          activeConfig = undefined;
+        }
+        activeConfig = nextConfig;
+        generation = ++generationCounter;
+        activeGeneration = generation;
+        vendorClient = undefined;
+        vendorScript = undefined;
+        vendorTrack = undefined;
+        vendorReady = false;
+        lastTrackedUrl = undefined;
+        lifecycleActive = true;
+        lifecycle = Object.freeze({ get active() { return lifecycleActive; } });
+        const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
+        handler = Object.freeze({
+          __astroAnalyticsBrand: brand,
+          __astroAnalyticsProvider: "umami",
+          status() {
+            if (activeGeneration !== generation || lifecycle.active !== true) return "adapter-not-loaded";
+            if (consentPending) return "consent-pending";
+            return hasUsableVendor() && typeof completedUrl === "string"
+              ? "ready"
+              : "adapter-not-loaded";
+          },
+          track(name, properties) {
+            try {
+              if (activeGeneration !== generation || lifecycle.active !== true || !hasUsableVendor()) {
+                return { ok: false, reason: consentPending ? "consent-pending" : "adapter-not-loaded" };
+              }
+              if (typeof completedUrl !== "string") return { ok: false, reason: "adapter-not-loaded" };
+              if (name.length > 50) return { ok: false, reason: "invalid-event" };
+              let data;
+              if (properties !== undefined) {
+                const keys = Reflect.ownKeys(properties);
+                if (keys.length > 50) return { ok: false, reason: "invalid-event" };
+                data = Object.create(null);
+                for (const key of keys) {
+                  const value = Reflect.get(properties, key);
+                  if (typeof value === "string" && value.length > 500) {
+                    return { ok: false, reason: "invalid-event" };
+                  }
+                  if (typeof value === "number") {
+                    const numeric = /^-?\\d+(?:\\.(\\d+))?(?:e([+-]?\\d+))?$/i.exec(String(value));
+                    const decimalPlaces = numeric === null
+                      ? 0
+                      : (numeric[1]?.length ?? 0) - Number(numeric[2] ?? 0);
+                    if (decimalPlaces > 4) return { ok: false, reason: "invalid-event" };
+                  }
+                  Reflect.defineProperty(data, key, {
+                    configurable: false,
+                    enumerable: true,
+                    value,
+                    writable: false,
+                  });
+                }
+                Object.freeze(data);
+              }
+              const eventUrl = completedUrl;
+              const eventTitle = completedTitle ?? "";
+              const eventReferrer = completedReferrer ?? "";
+              const payload = (properties) => {
+                const base = (typeof properties === "object" || typeof properties === "function") && properties !== null
+                  ? properties
+                  : {};
+                return data === undefined
+                  ? { ...base, url: eventUrl, title: eventTitle, referrer: eventReferrer, name }
+                  : { ...base, url: eventUrl, title: eventTitle, referrer: eventReferrer, name, data };
+              };
+              return callUmami([payload])
+                ? { ok: true }
+                : { ok: false, reason: "adapter-not-loaded" };
+            } catch { return { ok: false, reason: "adapter-not-loaded" }; }
+          }
+        });
+        registerHandler();
+        if (consentPending) return;
+        if (!ensureObserver()) {
+          lifecycleActive = false;
+          activeGeneration = undefined;
+          activeConfig = undefined;
+          return;
+        }
+
+        const getElementById = Reflect.get(documentValue, "getElementById");
+        const createElement = Reflect.get(documentValue, "createElement");
+        const head = Reflect.get(documentValue, "head");
+        if (typeof getElementById !== "function" || typeof createElement !== "function" ||
+            (typeof head !== "object" && typeof head !== "function") || head === null) {
+          lifecycleActive = false;
+          activeGeneration = undefined;
+          activeConfig = undefined;
+          return;
+        }
+        if (Reflect.apply(getElementById, documentValue, [scriptId]) !== null ||
+            Reflect.getOwnPropertyDescriptor(root, "umami") !== undefined) {
+          lifecycleActive = false;
+          activeGeneration = undefined;
+          activeConfig = undefined;
+          return;
+        }
+
+        let boundValue;
+        let assignedVendor;
+        let script;
+        const get = () => boundValue;
+        const set = (value) => {
+          boundValue = value;
+          try {
+            if (script !== undefined && Reflect.get(documentValue, "currentScript") === script &&
+                matchesConfiguredScript()) assignedVendor = value;
+          } catch {}
+        };
+        const releaseBinding = () => {
+          try {
+            const descriptor = Reflect.getOwnPropertyDescriptor(root, "umami");
+            if (descriptor === undefined || descriptor.get !== get || descriptor.set !== set) return;
+            if (boundValue === assignedVendor) Reflect.deleteProperty(root, "umami");
+            else Reflect.defineProperty(root, "umami", {
+              configurable: true, enumerable: true, value: boundValue, writable: true
+            });
+          } catch {}
+        };
+        const fail = () => {
+          if (activeGeneration !== generation || !lifecycleActive) return;
+          lifecycleActive = false;
+          activeGeneration = undefined;
+          activeConfig = undefined;
+          vendorClient = undefined;
+          vendorScript = undefined;
+          vendorTrack = undefined;
+          vendorReady = false;
+          try {
+            if ((typeof script === "object" || typeof script === "function") && script !== null) {
+              const remove = Reflect.get(script, "remove");
+              if (typeof remove === "function") Reflect.apply(remove, script, []);
+            }
+          } catch {}
+          releaseBinding();
+        };
+        cleanup = fail;
+        if (Reflect.defineProperty(root, "umami", {
+          configurable: true, enumerable: true, get, set
+        }) !== true) {
+          lifecycleActive = false;
+          activeGeneration = undefined;
+          activeConfig = undefined;
+          return;
+        }
+        const descriptor = Reflect.getOwnPropertyDescriptor(root, "umami");
+        if (descriptor === undefined || descriptor.get !== get || descriptor.set !== set) {
+          fail();
+          return;
+        }
+        script = Reflect.apply(createElement, documentValue, ["script"]);
+        vendorScript = script;
+        Reflect.set(script, "id", scriptId);
+        Reflect.set(script, "src", config.scriptSrc);
+        Reflect.set(script, "async", true);
+        Reflect.set(script, "defer", true);
+        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-auto-pageview", "false"]);
+        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-cwl-astro-analytics", "umami-v1"]);
+        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-website-id", config.websiteId]);
+        if (typeof config.hostUrl === "string") {
+          Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-host-url", config.hostUrl]);
+        }
+        Reflect.apply(Reflect.get(script, "addEventListener"), script, ["load", () => {
+          try {
+            if (activeGeneration !== generation || lifecycle.active !== true) return;
+            const current = Reflect.get(root, "umami");
+            const track = (typeof current === "object" || typeof current === "function") && current !== null
+              ? Reflect.get(current, "track")
+              : undefined;
+            if (!matchesConfiguredScript() || current !== assignedVendor || typeof track !== "function") {
+              fail();
+              return;
+            }
+            vendorClient = current;
+            vendorTrack = track;
+            vendorReady = true;
+            if (config.pageviews !== "none") {
+              if (isPrerendering()) {
+                const addEventListener = Reflect.get(documentValue, "addEventListener");
+                if (typeof addEventListener !== "function") { fail(); return; }
+                Reflect.apply(addEventListener, documentValue, ["prerenderingchange", () => {
+                  if (activeGeneration === generation) flushPageview();
+                }, { once: true }]);
+              } else {
+                flushPageview();
+              }
+            }
+          } catch { fail(); }
+        }, { once: true }]);
+        Reflect.apply(Reflect.get(script, "addEventListener"), script, ["error", fail, { once: true }]);
+        Reflect.apply(Reflect.get(head, "appendChild"), head, [script]);
+      } catch {
+        if (typeof cleanup === "function") cleanup();
+        else if (activeGeneration === generation) {
+          lifecycleActive = false;
+          activeGeneration = undefined;
+          activeConfig = undefined;
+        }
+      }
     };
     const coordinator = Object.freeze({ run, runtimeToken: config.runtimeToken });
     if (Reflect.defineProperty(documentValue, coordinatorKey, {

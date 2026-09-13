@@ -63,11 +63,21 @@ export interface MatomoProvider {
   consent?: { mode: ConsentMode };
 }
 
+export interface UmamiProvider {
+  name: "umami";
+  websiteId: string;
+  scriptSrc: string;
+  hostUrl?: string;
+  pageviews?: PageviewMode;
+  consent?: { mode: ConsentMode };
+}
+
 export type AnalyticsProvider =
   | GoogleAnalyticsProvider
   | PlausibleProvider
   | FathomProvider
-  | MatomoProvider;
+  | MatomoProvider
+  | UmamiProvider;
 
 export type NormalizedAnalyticsProvider = AnalyticsProvider & {
   pageviews: PageviewMode;
@@ -453,6 +463,48 @@ function normalizeMatomo(provider: UnknownRecord): MatomoProvider & {
   return normalized;
 }
 
+function normalizeUmami(provider: UnknownRecord): UmamiProvider & {
+  pageviews: PageviewMode;
+} {
+  assertExactKeys(
+    provider,
+    ["name", "websiteId", "scriptSrc", "hostUrl", "pageviews", "consent"],
+    "provider",
+  );
+  for (const key of ["websiteId", "scriptSrc"] as const) {
+    if (!hasOwn(provider, key)) {
+      throw new TypeError(`provider.${key} is required.`);
+    }
+  }
+  const websiteId = requireNonEmpty(provider.websiteId, "provider.websiteId");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(websiteId)) {
+    throw new TypeError("provider.websiteId must be a UUID string.");
+  }
+  const normalized: UmamiProvider & { pageviews: PageviewMode } = {
+    name: "umami",
+    websiteId,
+    scriptSrc: validateHttpsUrl(provider.scriptSrc, "provider.scriptSrc"),
+    pageviews: hasOwn(provider, "pageviews")
+      ? normalizePageviews(provider.pageviews, "provider.pageviews")
+      : "provider",
+  };
+  if (hasOwn(provider, "hostUrl")) {
+    const hostUrl = validateHttpsUrl(provider.hostUrl, "provider.hostUrl");
+    const parsed = new URL(hostUrl);
+    if (parsed.search || parsed.hash) {
+      throw new TypeError("provider.hostUrl must contain no query or fragment.");
+    }
+    normalized.hostUrl = hostUrl;
+  }
+  if (hasOwn(provider, "consent")) {
+    normalized.consent = normalizeSimpleConsent(
+      provider.consent,
+      "provider.consent",
+    );
+  }
+  return normalized;
+}
+
 function normalizeProvider(value: unknown): NormalizedAnalyticsProvider {
   const provider = expectObject(value, "provider");
   if (!hasOwn(provider, "name") || typeof provider.name !== "string") {
@@ -467,6 +519,8 @@ function normalizeProvider(value: unknown): NormalizedAnalyticsProvider {
       return normalizeFathom(provider);
     case "matomo":
       return normalizeMatomo(provider);
+    case "umami":
+      return normalizeUmami(provider);
     default:
       throw new TypeError(`provider.name ${JSON.stringify(provider.name)} is not supported.`);
   }

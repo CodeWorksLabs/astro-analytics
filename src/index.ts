@@ -11,6 +11,7 @@ import {
   createGoogleAnalyticsBootstrapScript,
   createMatomoBootstrapScript,
   createPlausibleBootstrapScript,
+  createUmamiBootstrapScript,
 } from "#runtime";
 
 const RUNTIME_TOKEN = randomUUID();
@@ -82,6 +83,16 @@ export default function astroAnalytics(
               scriptSrc: provider.scriptSrc ?? new URL("matomo.js", provider.trackerUrl).href,
               siteId: provider.siteId,
               trackerUrl: provider.trackerUrl,
+            }));
+          } else if (provider.name === "umami") {
+            runtimes.push(createUmamiBootstrapScript({
+              consentMode: provider.consent?.mode,
+              events: config.events,
+              hostUrl: provider.hostUrl,
+              pageviews: provider.pageviews,
+              runtimeToken: RUNTIME_TOKEN,
+              scriptSrc: provider.scriptSrc,
+              websiteId: provider.websiteId,
             }));
           }
         }

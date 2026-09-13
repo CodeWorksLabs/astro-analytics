@@ -20,7 +20,7 @@ import analytics, {
 The default export validates `AstroAnalyticsConfig` immediately and returns an
 Astro integration. During `astro:config:setup`, it injects the shared provider
 coordinator and each implemented adapter runtime, subject to configuration and
-command policy. Fathom, Plausible, Google Analytics 4, and Matomo each register an
+command policy. Fathom, Plausible, Google Analytics 4, Matomo, and Umami each register an
 independently observable runtime adapter.
 
 ### `normalizeConfig(value)`
@@ -55,7 +55,7 @@ The entry point exports the configuration types documented in the
 - `AnalyticsProvider`
 - `AstroAnalyticsConfig`
 - `ConsentMode` and `ConsentState`
-- `FathomProvider`, `GoogleAnalyticsProvider`, `MatomoProvider`, and `PlausibleProvider`
+- `FathomProvider`, `GoogleAnalyticsProvider`, `MatomoProvider`, `PlausibleProvider`, and `UmamiProvider`
 - `GoogleConsentConfig`
 - `NormalizedAnalyticsProvider` and `NormalizedAstroAnalyticsConfig`
 - `PageviewMode`
@@ -65,9 +65,8 @@ These remain forward-looking adapter-development contracts. Provider
 runtimes are selected internally and are not exported as public
 adapter objects.
 
-There is no Umami provider type or runtime export in alpha.8. References to
-Umami remain roadmap guidance rather than a public API commitment. Matomo's
-runtime factory is internal; sites configure it through `MatomoProvider`.
+Provider runtime factories are internal; sites configure them through their
+exported provider types.
 
 ## Client entry point
 

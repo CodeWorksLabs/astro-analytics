@@ -18,6 +18,11 @@ const matomo = {
   siteId: "1",
   eventCategory: "Astro",
 };
+const umami = {
+  name: "umami",
+  websiteId: "e676c9b4-11e4-4ef1-a4d7-87001773e9f2",
+  scriptSrc: "https://analytics.example.com/script.js",
+};
 
 function rejects(value: unknown, pattern: RegExp): void {
   assert.throws(() => normalizeConfig(value), pattern);
@@ -138,7 +143,7 @@ test("provider discriminator is required and fail-closed", () => {
 });
 
 test("every provider rejects unsupported pageview modes and extra fields", () => {
-  for (const provider of [google, plausible, fathom, matomo]) {
+  for (const provider of [google, plausible, fathom, matomo, umami]) {
     rejects(
       { provider: { ...provider, pageviews: "bogus" } },
       /pageviews must be provider, astro, or none/,
@@ -352,6 +357,43 @@ test("Matomo validates tracker identity, event category, and consent", () => {
   assert.deepEqual(config.provider, {
     ...matomo,
     scriptSrc: "https://analytics.example.com/matomo.js",
+    pageviews: "provider",
+  });
+});
+
+test("Umami validates website identity, tracker URLs, and consent", () => {
+  rejects({ provider: { name: "umami" } }, /websiteId is required/);
+  rejects(
+    { provider: { ...umami, websiteId: "not-a-uuid" } },
+    /websiteId must be a UUID string/,
+  );
+  rejects(
+    { provider: { ...umami, scriptSrc: "http://analytics.example.com/script.js" } },
+    /absolute HTTPS URL/,
+  );
+  rejects(
+    { provider: { ...umami, hostUrl: "https://user:pass@analytics.example.com" } },
+    /without credentials/,
+  );
+  rejects(
+    { provider: { ...umami, hostUrl: "https://analytics.example.com/?source=x" } },
+    /contain no query or fragment/,
+  );
+  rejects(
+    { provider: { ...umami, consent: { mode: "bogus" } } },
+    /must be immediate, deferred, or external/,
+  );
+  const config = normalizeConfig({
+    provider: {
+      ...umami,
+      hostUrl: "https://analytics.example.com",
+      consent: { mode: "immediate" },
+    },
+  });
+  assert.deepEqual(config.provider, {
+    ...umami,
+    hostUrl: "https://analytics.example.com/",
+    consent: { mode: "immediate" },
     pageviews: "provider",
   });
 });

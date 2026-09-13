@@ -138,7 +138,14 @@ per-provider `invalid-event` result. When Matomo uses `pageviews: "none"`, its
 Astro page-load listener still applies the URL, title, and preceding virtual URL
 of each completed route before later events; it does not send `trackPageView`.
 
-Umami event mapping is not implemented in alpha.8. No Umami result entry can
-appear until its provider type and adapter are added in a later reviewed candidate.
+Umami receives a payload-factory call containing the event name and data plus
+the last completed Astro route's URL, title, and referrer. This keeps events
+aligned with package pageviews after browser-history traversal and delayed
+tracker readiness. Provider-specific validation limits event names to 50
+characters, property bags to 50 entries, strings to 500 characters, and numbers
+to four decimal places. The shared client currently accepts primitive values
+only, even though Umami itself can accept arrays and nested objects. An accepted
+synchronous call produces Umami's independent `{ ok: true }` result; it does not
+prove server delivery.
 
 Do not depend on the brand or property descriptor as a security boundary.

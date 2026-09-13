@@ -3,13 +3,9 @@
 ## Current boundary
 
 Milestone 2 provides a strict configuration boundary, a bounded event helper,
-and real vendor adapters for Fathom, Plausible, Google Analytics 4, and Matomo. It has
+and real vendor adapters for Fathom, Plausible, Google Analytics 4, Matomo, and Umami. It has
 no event queue, storage layer, credential store, authentication system, or
 runtime consent-transition API.
-
-Umami is a planned provider, not a dormant alpha.8 adapter. No code path
-recognizes its provider name, creates its global, loads its script, or sends
-data to it.
 
 ## Injection policy
 
@@ -207,3 +203,45 @@ The coordinator's navigation observer remains so a later retry has current route
 history.
 Deferred and external consent remain fail-closed and create no Matomo global or
 network-loading element.
+
+The Umami adapter refuses a pre-existing `umami` global or occupied package
+script ID. Before loading, it owns a guarded accessor and records only the
+tracker value assigned while its script is `document.currentScript`; a
+lookalike value assigned by unrelated code cannot establish readiness. At
+execution, load, and every later use it revalidates the original package script's
+exact source, website ID, optional host, automatic-pageview control, and
+classic-script mode. While connected, that exact element must own the package
+DOM ID. After Astro's ClientRouter legitimately removes the loaded head element,
+the original exact element remains valid only while no replacement owns the ID.
+Script load additionally requires a stable callable `track` method. A foreign
+script binding, global, method, or attribute replacement immediately closes
+readiness and event acceptance; restoring the exact proven state restores
+readiness.
+
+Umami automatic pageviews are disabled through `data-auto-pageview="false"`.
+This requires Umami 3.2.0 or later.
+The adapter calls `umami.track(payloadFactory)` after ordinary-document DOM
+readiness or, when ClientRouter is present, Astro's post-swap page-load signal.
+The factory preserves Umami's default payload and replaces URL, title, and
+referrer with the completed route context. Tracker load alone never invents a
+completion. Missing or throwing navigation observer installation prevents the
+tracker from loading. After observer recovery, setup waits for the next observed
+completion and uses an empty referrer rather than inventing a route edge across
+the observation gap.
+`pageviews: "none"` sends no automatic pageview. When events are enabled it still
+observes the same document or ClientRouter completion lifecycle so events use the
+last completed route rather than the vendor's potentially stale private history
+state.
+
+Custom events use `umami.track(payloadFactory)` only while the exact load-proven
+tracker and method remain installed. The payload supplies the event name/data
+and the same completed URL/title/referrer context as pageviews. Per-provider
+limits enforce Umami's
+50-character name, 50-property data, 500-character string, and four-decimal
+number boundaries. Delivery remains vendor-controlled after synchronous
+acceptance. Script failure removes owned state and permits a clean retry. A
+synchronous pageview exception or a later in-flight URL retains that completed
+pageview for bounded matching-bootstrap retry. A subsequently completed route
+supersedes the retained record. Unrelated replacement state
+is preserved. Deferred and external consent load
+no Umami script or global and report `consent-pending`.

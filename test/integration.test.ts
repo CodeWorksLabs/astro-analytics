@@ -9,11 +9,13 @@ import {
   createGoogleAnalyticsBootstrapScript,
   createMatomoBootstrapScript,
   createPlausibleBootstrapScript,
+  createUmamiBootstrapScript,
   FATHOM_SCRIPT_ID,
   GOOGLE_ANALYTICS_SCRIPT_ID,
   MATOMO_SCRIPT_ID,
   PLAUSIBLE_SCRIPT_ID,
   RUNTIME_CLIENT_BRAND,
+  UMAMI_SCRIPT_ID,
 } from "../src/runtime.ts";
 
 type SetupHook = NonNullable<
@@ -170,6 +172,34 @@ function executeMatomoBootstrap(
   });
 }
 
+function executeUmamiBootstrap(
+  context: vm.Context,
+  overrides: Partial<Parameters<typeof createUmamiBootstrapScript>[0]> = {},
+): void {
+  const options = {
+    events: true,
+    pageviews: "provider" as const,
+    runtimeToken: "test-runtime-token",
+    scriptSrc: "https://analytics.example/script.js",
+    websiteId: "e676c9b4-11e4-4ef1-a4d7-87001773e9f2",
+    ...overrides,
+  };
+  if (options.events) {
+    vm.runInNewContext(
+      createBootstrapScript({
+        events: true,
+        providers: ["umami"],
+        runtimeToken: options.runtimeToken,
+      }),
+      context,
+      { timeout: 1_000 },
+    );
+  }
+  vm.runInNewContext(createUmamiBootstrapScript(options), context, {
+    timeout: 1_000,
+  });
+}
+
 function activatePlausible(
   context: vm.Context,
   script: Record<string, unknown>,
@@ -206,6 +236,21 @@ function activateMatomo(
   return commands;
 }
 
+function activateUmami(
+  context: vm.Context,
+  script: Record<string, unknown>,
+  calls: unknown[][] = [],
+): unknown[][] {
+  const umami = {
+    track(...args: unknown[]) { calls.push(args); },
+  };
+  (context.document as Record<string, unknown>).currentScript = script;
+  context.umami = umami;
+  (context.document as Record<string, unknown>).currentScript = undefined;
+  (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+  return calls;
+}
+
 function createDocumentHarness(existingById?: Record<string, unknown> | Record<string, unknown>[]): {
   appended: Record<string, unknown>[];
   document: Record<string, unknown>;
@@ -237,6 +282,7 @@ function createDocumentHarness(existingById?: Record<string, unknown> | Record<s
         isConnected: false,
         listeners,
         noModule: false,
+        ownerDocument: this,
         tagName: "SCRIPT",
         type: "",
         addEventListener(name: string, listener: () => void) {
@@ -249,6 +295,9 @@ function createDocumentHarness(existingById?: Record<string, unknown> | Record<s
         },
         getAttribute(name: string) {
           return attributes[name] ?? null;
+        },
+        getAttributeNames() {
+          return Object.keys(attributes);
         },
         setAttribute(name: string, value: string) {
           attributes[name] = value;
@@ -324,6 +373,558 @@ test("Matomo injects without the optional event client", () => {
   assert.equal(injected.length, 1);
   assert.match(injected[0] ?? "", /matomo-v1/);
   assert.match(injected[0] ?? "", /https:\/\/analytics\.example\/matomo\.php/);
+});
+
+test("Umami injects without the optional event client", () => {
+  const injected: string[] = [];
+  runSetup(
+    astroAnalytics({
+      provider: {
+        name: "umami",
+        websiteId: "e676c9b4-11e4-4ef1-a4d7-87001773e9f2",
+        scriptSrc: "https://analytics.example/script.js",
+      },
+      events: false,
+    }),
+    "build",
+    injected,
+  );
+  assert.equal(injected.length, 1);
+  assert.match(injected[0] ?? "", /umami-v1/);
+  assert.match(injected[0] ?? "", /e676c9b4-11e4-4ef1-a4d7-87001773e9f2/);
+});
+
+test("Umami loads its owned tracker and maps Astro pageviews and bounded events", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, {
+      referrer: "https://search.example/",
+      title: "Landing",
+    }),
+    location: { href: "https://example.test/landing/" },
+  };
+  executeUmamiBootstrap(context, { hostUrl: "https://analytics.example/" });
+  assert.equal(harness.appended.length, 1);
+  const script = harness.appended[0] ?? {};
+  assert.equal(script.id, UMAMI_SCRIPT_ID);
+  assert.equal(script.src, "https://analytics.example/script.js");
+  assert.equal(script.async, true);
+  assert.equal(script.defer, true);
+  assert.deepEqual(script.attributes, {
+    "data-auto-pageview": "false",
+    "data-cwl-astro-analytics": "umami-v1",
+    "data-host-url": "https://analytics.example/",
+    "data-website-id": "e676c9b4-11e4-4ef1-a4d7-87001773e9f2",
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
+    umami: "adapter-not-loaded",
+  });
+
+  const calls = activateUmami(context, script);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
+    umami: "adapter-not-loaded",
+  });
+  assert.equal(calls.length, 0);
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
+    umami: "ready",
+  });
+  assert.equal(calls.length, 1);
+  const pageviewPayload = calls[0]?.[0] as (properties: object) => object;
+  assert.deepEqual(JSON.parse(JSON.stringify(pageviewPayload({ website: "site", hostname: "example.test" }))), {
+    website: "site",
+    hostname: "example.test",
+    url: "https://example.test/landing/",
+    title: "Landing",
+    referrer: "https://search.example/",
+  });
+  const eventResult = vm.runInNewContext(
+    'astroAnalytics.track("signup", { plan: "pro", price: 29.99, member: true })',
+    context,
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(eventResult)), {
+    ok: true,
+    providers: { umami: { ok: true } },
+  });
+  const eventPayload = calls[1]?.[0] as (properties: object) => object;
+  assert.deepEqual(JSON.parse(JSON.stringify(eventPayload({ website: "site" }))), {
+    website: "site",
+    url: "https://example.test/landing/",
+    title: "Landing",
+    referrer: "https://search.example/",
+    name: "signup",
+    data: { plan: "pro", price: 29.99, member: true },
+  });
+
+  context.location.href = "https://example.test/next/";
+  context.document.title = "Next";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.equal(calls.length, 3);
+  const nextPayload = calls[2]?.[0] as (properties: object) => object;
+  assert.deepEqual(JSON.parse(JSON.stringify(nextPayload({ website: "site" }))), {
+    website: "site",
+    url: "https://example.test/next/",
+    title: "Next",
+    referrer: "https://example.test/landing/",
+  });
+});
+
+test("Umami establishes an ordinary MPA initial route at document readiness", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, {
+      readyState: "loading",
+      referrer: "https://search.example/",
+      title: "MPA landing",
+    }),
+    location: { href: "https://example.test/landing/" },
+  };
+  executeUmamiBootstrap(context);
+  const calls = activateUmami(context, harness.appended[0] ?? {});
+  assert.equal(calls.length, 0);
+  assert.equal(context.astroAnalytics.status().umami, "adapter-not-loaded");
+  context.document.readyState = "interactive";
+  harness.documentListeners.get("DOMContentLoaded")?.[0]?.();
+  assert.equal(calls.length, 1);
+  assert.equal(context.astroAnalytics.status().umami, "ready");
+  const payload = calls[0]?.[0] as (properties: object) => object;
+  assert.deepEqual(JSON.parse(JSON.stringify(payload({ website: "site" }))), {
+    website: "site",
+    url: "https://example.test/landing/",
+    title: "MPA landing",
+    referrer: "https://search.example/",
+  });
+});
+
+test("Umami waits for ClientRouter page-load instead of using document readiness", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, {
+      querySelector(selector: string) {
+        return selector === '[name="astro-view-transitions-enabled"]' ? {} : null;
+      },
+      readyState: "complete",
+      title: "Router landing",
+    }),
+    location: { href: "https://example.test/router/" },
+  };
+  executeUmamiBootstrap(context);
+  const calls = activateUmami(context, harness.appended[0] ?? {});
+  assert.equal(calls.length, 0);
+  assert.equal(context.astroAnalytics.status().umami, "adapter-not-loaded");
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.equal(calls.length, 1);
+  assert.equal(context.astroAnalytics.status().umami, "ready");
+});
+
+test("Umami enforces provider event limits without disturbing other providers", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/" },
+  };
+  executeUmamiBootstrap(context, { pageviews: "none" });
+  const calls = activateUmami(context, harness.appended[0] ?? {});
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  const results = [
+    vm.runInNewContext(`astroAnalytics.track("${"x".repeat(51)}")`, context),
+    vm.runInNewContext('astroAnalytics.track("too-many", Object.fromEntries(Array.from({ length: 51 }, (_, index) => [`p${index}`, index])))', context),
+    vm.runInNewContext('astroAnalytics.track("long-string", { value: "x".repeat(501) })', context),
+    vm.runInNewContext('astroAnalytics.track("precision", { value: 1.23456 })', context),
+  ];
+  for (const result of results) {
+    assert.deepEqual(JSON.parse(JSON.stringify(result)), {
+      ok: false,
+      providers: { umami: { ok: false, reason: "invalid-event" } },
+      reason: "invalid-event",
+    });
+  }
+  assert.equal(calls.length, 0);
+});
+
+test("Umami none mode suppresses pageviews while retaining events", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, { readyState: "complete" }),
+    location: { href: "https://example.test/" },
+  };
+  executeUmamiBootstrap(context, { pageviews: "none" });
+  assert.equal(harness.documentListeners.has("astro:page-load"), true);
+  const calls = activateUmami(context, harness.appended[0] ?? {});
+  assert.equal(calls.length, 0);
+  assert.equal(context.astroAnalytics.status().umami, "ready");
+  assert.equal(context.astroAnalytics.track("event-only").ok, true);
+  const payload = calls[0]?.[0] as (properties: object) => object;
+  assert.deepEqual(JSON.parse(JSON.stringify(payload({ website: "site" }))), {
+    website: "site",
+    url: "https://example.test/",
+    title: "",
+    referrer: "",
+    name: "event-only",
+  });
+});
+
+test("Umami deduplicates matching bootstrap reentry while its tracker is loading", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/" },
+  };
+  executeUmamiBootstrap(context);
+  executeUmamiBootstrap(context);
+  assert.equal(harness.appended.length, 1);
+  const calls = activateUmami(context, harness.appended[0] ?? {});
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.equal(calls.length, 1);
+  assert.equal(context.astroAnalytics.track("after-reentry").ok, true);
+});
+
+test("Umami rejects and preserves an unrelated assignment made while its tracker loads", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/" },
+  };
+  executeUmamiBootstrap(context);
+  const script = harness.appended[0] ?? {};
+  const unrelated = { track() {} };
+  context.umami = unrelated;
+  (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+  assert.equal(script.isConnected, false);
+  assert.equal(context.umami, unrelated);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
+    umami: "adapter-not-loaded",
+  });
+});
+
+test("Umami rejects mutated source, website, host, pageview, type, and DOM identity before execution", () => {
+  const cases: Array<{
+    hostUrl?: string;
+    mutate(script: Record<string, any>): void;
+  }> = [
+    { mutate: (script) => { script.src = "https://foreign.example/script.js"; } },
+    { mutate: (script) => { script.attributes["data-website-id"] = "00000000-0000-0000-0000-000000000001"; } },
+    { mutate: (script) => { script.attributes["data-auto-pageview"] = "true"; } },
+    {
+      hostUrl: "https://analytics.example/",
+      mutate: (script) => { script.attributes["data-host-url"] = "https://foreign.example/"; },
+    },
+    { mutate: (script) => { script.attributes["data-auto-track"] = "false"; } },
+    { mutate: (script) => { script.type = "module"; } },
+  ];
+
+  for (const testCase of cases) {
+    const harness = createDocumentHarness();
+    const context: vm.Context = {
+      document: harness.document,
+      location: { href: "https://example.test/" },
+    };
+    executeUmamiBootstrap(context, { hostUrl: testCase.hostUrl });
+    const script = harness.appended[0] ?? {};
+    harness.documentListeners.get("astro:page-load")?.[0]?.();
+    testCase.mutate(script);
+    activateUmami(context, script);
+    assert.equal(script.isConnected, false);
+    assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
+      umami: "adapter-not-loaded",
+    });
+  }
+});
+
+test("Umami closes and restores readiness with its exact post-load script identity", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/" },
+  };
+  executeUmamiBootstrap(context, { pageviews: "none" });
+  const script = harness.appended[0] ?? {};
+  activateUmami(context, script);
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.equal(context.astroAnalytics.status().umami, "ready");
+
+  const attributes = script.attributes as Record<string, string>;
+  const websiteId = attributes["data-website-id"];
+  attributes["data-website-id"] = "00000000-0000-0000-0000-000000000001";
+  assert.equal(context.astroAnalytics.status().umami, "adapter-not-loaded");
+  attributes["data-website-id"] = websiteId ?? "";
+  assert.equal(context.astroAnalytics.status().umami, "ready");
+
+  const src = script.src;
+  script.src = "https://foreign.example/script.js";
+  assert.equal(context.astroAnalytics.status().umami, "adapter-not-loaded");
+  script.src = src;
+  assert.equal(context.astroAnalytics.status().umami, "ready");
+});
+
+test("Umami retains proven readiness across Astro head disposal but rejects a replacement binding", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, { title: "A" }),
+    location: { href: "https://example.test/a" },
+  };
+  executeUmamiBootstrap(context);
+  const script = harness.appended[0] ?? {};
+  const calls = activateUmami(context, script);
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.equal(calls.length, 1);
+
+  (script.remove as () => void)();
+  context.location.href = "https://example.test/b";
+  context.document.title = "B";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.equal(calls.length, 2);
+  assert.equal(context.astroAnalytics.track("after-swap").ok, true);
+
+  const originalGetElementById = context.document.getElementById;
+  context.document.getElementById = () => ({ id: UMAMI_SCRIPT_ID });
+  assert.equal(context.astroAnalytics.status().umami, "adapter-not-loaded");
+  context.document.getElementById = originalGetElementById;
+  assert.equal(context.astroAnalytics.status().umami, "ready");
+
+  context.location.href = "https://example.test/a";
+  context.document.title = "A again";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.equal(calls.length, 4);
+});
+
+test("Umami can finish loading after ClientRouter removes its proven script element", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, {
+      querySelector(selector: string) {
+        return selector === '[name="astro-view-transitions-enabled"]' ? {} : null;
+      },
+      readyState: "complete",
+      title: "After swap",
+    }),
+    location: { href: "https://example.test/after-swap" },
+  };
+  executeUmamiBootstrap(context);
+  const script = harness.appended[0] ?? {};
+  (script.remove as () => void)();
+  const calls = activateUmami(context, script);
+  assert.equal(calls.length, 0);
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.equal(calls.length, 1);
+  assert.equal(context.astroAnalytics.track("loaded-after-swap").ok, true);
+});
+
+test("Umami closes readiness if its load-proven tracker or track method is replaced", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/" },
+  };
+  executeUmamiBootstrap(context, { pageviews: "none" });
+  const script = harness.appended[0] ?? {};
+  activateUmami(context, script);
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  const loadProvenClient = context.umami;
+  const loadProvenTrack = loadProvenClient.track;
+
+  loadProvenClient.track = () => {};
+  assert.equal(context.astroAnalytics.track("method-replaced").ok, false);
+  loadProvenClient.track = loadProvenTrack;
+  assert.equal(context.astroAnalytics.track("method-restored").ok, true);
+
+  context.umami = { track() {} };
+  assert.equal(context.astroAnalytics.track("client-replaced").ok, false);
+  context.umami = loadProvenClient;
+  assert.equal(context.astroAnalytics.track("client-restored").ok, true);
+});
+
+test("Umami defers its initial pageview until prerender activation", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, { prerendering: true }),
+    location: { href: "https://example.test/prerendered/" },
+  };
+  executeUmamiBootstrap(context);
+  const calls = activateUmami(context, harness.appended[0] ?? {});
+  assert.equal(calls.length, 0);
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.equal(calls.length, 0);
+  context.document.prerendering = false;
+  harness.documentListeners.get("prerenderingchange")?.[0]?.();
+  assert.equal(calls.length, 1);
+});
+
+test("Umami events retain completed Astro context across forward and back traversal", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, { referrer: "https://search.example/", title: "A" }),
+    location: { href: "https://example.test/a" },
+  };
+  executeUmamiBootstrap(context);
+  const calls = activateUmami(context, harness.appended[0] ?? {});
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  context.astroAnalytics.track("on-a");
+
+  context.location.href = "https://example.test/b";
+  context.document.title = "B";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  context.astroAnalytics.track("on-b");
+
+  context.location.href = "https://example.test/a";
+  context.document.title = "A again";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  context.astroAnalytics.track("back-on-a");
+
+  const eventPayloads = [calls[1], calls[3], calls[5]].map((call) => {
+    const payload = call?.[0] as (properties: object) => object;
+    return JSON.parse(JSON.stringify(payload({ website: "site" })));
+  });
+  assert.deepEqual(eventPayloads, [
+    { website: "site", url: "https://example.test/a", title: "A", referrer: "https://search.example/", name: "on-a" },
+    { website: "site", url: "https://example.test/b", title: "B", referrer: "https://example.test/a", name: "on-b" },
+    { website: "site", url: "https://example.test/a", title: "A again", referrer: "https://example.test/b", name: "back-on-a" },
+  ]);
+});
+
+test("Umami delayed readiness gives its pageview and event the same completed edge", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, { referrer: "https://search.example/", title: "A" }),
+    location: { href: "https://example.test/a" },
+  };
+  executeUmamiBootstrap(context);
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  context.location.href = "https://example.test/b";
+  context.document.title = "B";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  const calls = activateUmami(context, harness.appended[0] ?? {});
+  context.astroAnalytics.track("after-load");
+  const pageview = (calls[0]?.[0] as (properties: object) => object)({ website: "site" });
+  const event = (calls[1]?.[0] as (properties: object) => object)({ website: "site" });
+  assert.deepEqual(JSON.parse(JSON.stringify(pageview)), {
+    website: "site", url: "https://example.test/b", title: "B", referrer: "https://example.test/a",
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(event)), {
+    website: "site", url: "https://example.test/b", title: "B", referrer: "https://example.test/a", name: "after-load",
+  });
+});
+
+test("Umami retains a completed pageview while a later navigation is in flight", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, { referrer: "https://search.example/", title: "A" }),
+    location: { href: "https://example.test/a" },
+  };
+  executeUmamiBootstrap(context);
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+
+  context.location.href = "https://example.test/in-flight";
+  const calls = activateUmami(context, harness.appended[0] ?? {});
+  assert.equal(calls.length, 0);
+
+  context.location.href = "https://example.test/a";
+  executeUmamiBootstrap(context);
+  assert.equal(calls.length, 1);
+  const payload = calls[0]?.[0] as (properties: object) => object;
+  assert.deepEqual(JSON.parse(JSON.stringify(payload({ website: "site" }))), {
+    website: "site",
+    url: "https://example.test/a",
+    title: "A",
+    referrer: "https://search.example/",
+  });
+});
+
+test("Umami retains a synchronously rejected pageview for matching reentry", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/" },
+  };
+  executeUmamiBootstrap(context);
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  const script = harness.appended[0] ?? {};
+  const calls: unknown[][] = [];
+  let attempts = 0;
+  const umami = {
+    track(...args: unknown[]) {
+      attempts += 1;
+      if (attempts === 1) throw new Error("transient");
+      calls.push(args);
+    },
+  };
+  context.document.currentScript = script;
+  context.umami = umami;
+  context.document.currentScript = undefined;
+  (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+  assert.equal(attempts, 1);
+  assert.equal(calls.length, 0);
+  executeUmamiBootstrap(context);
+  assert.equal(attempts, 2);
+  assert.equal(calls.length, 1);
+});
+
+test("Umami consent, collisions, failure cleanup, and retry fail closed", () => {
+  const pendingHarness = createDocumentHarness();
+  const pendingContext: vm.Context = {
+    document: pendingHarness.document,
+    location: { href: "https://example.test/" },
+  };
+  executeUmamiBootstrap(pendingContext, { consentMode: "external" });
+  assert.equal(pendingHarness.appended.length, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(pendingContext.astroAnalytics.status())), {
+    umami: "consent-pending",
+  });
+
+  const collisionHarness = createDocumentHarness();
+  const collisionContext: vm.Context = {
+    document: collisionHarness.document,
+    location: { href: "https://example.test/" },
+    umami: { track() {} },
+  };
+  executeUmamiBootstrap(collisionContext);
+  assert.equal(collisionHarness.appended.length, 0);
+  assert.equal(typeof collisionContext.umami.track, "function");
+
+  const retryHarness = createDocumentHarness();
+  const retryContext: vm.Context = {
+    document: retryHarness.document,
+    location: { href: "https://example.test/" },
+  };
+  executeUmamiBootstrap(retryContext);
+  const first = retryHarness.appended[0] ?? {};
+  (first.listeners as Map<string, Array<() => void>>).get("error")?.[0]?.();
+  assert.equal(first.isConnected, false);
+  assert.equal(Reflect.getOwnPropertyDescriptor(retryContext, "umami"), undefined);
+  executeUmamiBootstrap(retryContext);
+  assert.equal(retryHarness.appended.length, 2);
+  activateUmami(retryContext, retryHarness.appended[1] ?? {});
+  (first.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+  retryHarness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.equal(retryContext.astroAnalytics.track("after-retry").ok, true);
+});
+
+test("Umami waits for an observed completion after navigation observer recovery", () => {
+  const harness = createDocumentHarness();
+  const originalAddEventListener = harness.document.addEventListener;
+  harness.document.addEventListener = undefined;
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/start/" },
+  };
+  executeUmamiBootstrap(context);
+  assert.equal(harness.appended.length, 0);
+  harness.document.addEventListener = originalAddEventListener;
+  context.location.href = "https://example.test/missed/";
+  executeUmamiBootstrap(context);
+  assert.equal(harness.appended.length, 0);
+  assert.equal(harness.documentListeners.get("astro:page-load")?.length, 1);
+  context.location.href = "https://example.test/observed/";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.equal(harness.appended.length, 1);
+  const calls = activateUmami(context, harness.appended[0] ?? {});
+  const payload = calls[0]?.[0] as (properties: object) => object;
+  assert.deepEqual(JSON.parse(JSON.stringify(payload({ website: "site" }))), {
+    website: "site",
+    url: "https://example.test/observed/",
+    title: "",
+    referrer: "",
+  });
 });
 
 test("Matomo initializes its owned queue and sends Astro pageviews and mapped events", () => {

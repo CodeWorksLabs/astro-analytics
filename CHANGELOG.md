@@ -7,6 +7,29 @@ release claim.
 
 ## Unreleased
 
+## 0.1.0-alpha.9 - Candidate
+
+- Add strict Umami Cloud and self-hosted configuration using a website UUID,
+  tracker script URL, optional host URL, pageview mode, and consent mode.
+- Add a package-owned Umami runtime that disables vendor automatic pageviews,
+  sends ordinary-document pageviews after DOM readiness and ClientRouter
+  pageviews after Astro's post-swap signal,
+  and exposes independently reported readiness and event results.
+- Map package events through Umami's payload-factory form with completed Astro
+  route context while enforcing documented event-name, property-count,
+  string-length, and numeric-precision limits.
+- Fail closed on pending consent, occupied globals, script collisions,
+  unproven tracker assignment, missing navigation observation, and tracker
+  replacement; preserve unrelated replacement state during cleanup and allow
+  a clean retry after terminal failure.
+- Bind pageviews and events to the same completed Astro route context, including
+  browser-history traversal, delayed tracker readiness, and event-only mode.
+- Revalidate the exact script source, website, host, automatic-pageview setting,
+  executable mode, and connected or legitimately detached DOM identity at
+  execution, load, and every later use.
+- Retain confirmed pageviews through synchronous rejection and in-flight
+  navigation for bounded matching-bootstrap retry.
+
 ## 0.1.0-alpha.8 - Candidate
 
 - Add strict Matomo Cloud and self-hosted configuration using an exact public

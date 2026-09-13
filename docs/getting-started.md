@@ -3,13 +3,10 @@
 ## Status
 
 Analytics for Astro has a public source repository. The current version is the
-source-tagged `0.1.0-alpha.8` candidate; there is no supported npm installation yet.
+source-tagged `0.1.0-alpha.9` candidate; there is no supported npm installation yet.
 
-Milestone 2 implements Fathom, Plausible, Google Analytics 4, and Matomo pageviews and
-custom events. No queue or runtime consent activation API is included yet.
-
-Umami is approved for the first stable provider set but remains planned.
-Alpha.8 does not accept its provider name or load its tracker.
+Milestone 2 implements Fathom, Plausible, Google Analytics 4, Matomo, and Umami
+pageviews and custom events. No queue or runtime consent activation API is included yet.
 
 ## Declared requirements
 
@@ -28,12 +25,12 @@ been tested. The current exact consumer evidence is:
 
 Starlight 0.41.11 with Astro 7.3.2 was qualified for the earlier alpha.3
 candidate on September 11, 2026. It remains eligible under the peer range, but
-that historical result is not current alpha.8 execution evidence.
+that historical result is not current alpha.9 execution evidence.
 
 Astro 5.18.2 and 6.4.8 built successfully with the exact alpha.2 package used
 to establish this boundary, but their production dependency audits contain
 critical upstream Astro advisories. They and Starlight 0.35 through 0.40, whose
-peer requirements select those Astro majors, are excluded from the alpha.8
+peer requirements select those Astro majors, are excluded from the alpha.9
 eligibility range. Future versions matching the bounded peer ranges remain
 eligible, not automatically qualified compatibility claims.
 
@@ -142,6 +139,30 @@ analytics({
 credential. The default tracker script is `matomo.js` beside that endpoint.
 Self-hosted installations with another public script location can set
 `scriptSrc` explicitly.
+
+## Configure Umami
+
+```js
+analytics({
+  providers: [
+    {
+      name: "umami",
+      websiteId: "YOUR-UMAMI-WEBSITE-UUID",
+      scriptSrc: "https://analytics.example.com/script.js",
+      hostUrl: "https://analytics.example.com",
+    },
+  ],
+  events: true,
+});
+```
+
+Use the public website UUID and tracker URL from Umami's tracking-code screen.
+`hostUrl` is optional when Umami should collect at the same origin that serves
+the script. The adapter disables Umami's automatic pageviews and sends them
+after DOM readiness on ordinary pages and after Astro's post-swap page-load
+lifecycle when ClientRouter is present, so client-navigation metadata is current.
+Use Umami 3.2.0 or later; older trackers do not support the required
+`data-auto-pageview` control.
 
 ## Next reading
 

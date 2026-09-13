@@ -70,6 +70,8 @@ test("configuredProviders returns only a unique supported provider list", () => 
   assert.deepEqual(configuredProviders(), []);
   setWindow({ astroAnalytics: { providers: ["matomo"], track() {} } });
   assert.deepEqual(configuredProviders(), ["matomo"]);
+  setWindow({ astroAnalytics: { providers: ["umami"], track() {} } });
+  assert.deepEqual(configuredProviders(), ["umami"]);
 });
 
 test("providerStatuses validates an exact status for every configured provider", () => {

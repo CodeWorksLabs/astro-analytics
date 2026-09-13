@@ -151,6 +151,7 @@ function normalizeProviderNames(value: unknown): readonly ProviderName[] | undef
     "google-analytics",
     "matomo",
     "plausible",
+    "umami",
   ]);
   const names: ProviderName[] = [];
   for (const provider of value) {

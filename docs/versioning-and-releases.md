@@ -13,15 +13,18 @@ record and must be stated separately. The current qualified matrix is Astro
 7.3.2 and Starlight 0.42.0 with Astro 7.3.2, both on Node.js 22.22.2.
 Starlight 0.41.11 with Astro 7.3.2 was qualified for alpha.3 on September 11,
 2026; it remains peer-eligible, but that historical result is not current
-alpha.8 execution evidence. Other versions admitted by the bounded peer ranges
+alpha.9 execution evidence. Other versions admitted by the bounded peer ranges
 are not yet compatibility claims.
 
 ## Current line
 
-The current working Milestone 2 candidate is `0.1.0-alpha.8`:
+The current Milestone 2 candidate is `0.1.0-alpha.9`:
 
 - `0.1.0` identifies the first pre-stable feature line.
 - `alpha` states that the package is incomplete and not production-ready.
+- `.9` identifies the source-tagged Umami adapter candidate. It has passed
+  independent review and clean Astro and Starlight consumer qualification but
+  is not yet repository-sandbox or provider-side live-qualified.
 - `.8` identifies the reviewed and live-qualified Matomo adapter candidate;
   its public source tag is `v0.1.0-alpha.8`, while npm publication remains
   unauthorized and absent.
@@ -83,10 +86,11 @@ guard. Removing it requires separate release authorization and review.
 
 Matomo completed independent review, clean Astro and Starlight package-consumer
 qualification, repository-driven sandbox deployment, and provider-side live
-qualification on September 13, 2026. Umami remains a planned feature addition
-requiring a later numbered alpha candidate. The line may advance to an RC only
-after all five
-accepted providers are implemented and the feature set is believed complete.
+qualification on September 13, 2026. Umami has passed independent review and
+clean Astro and Starlight package-consumer qualification; it still requires
+repository-driven sandbox deployment and provider-side live qualification. The
+line may advance to an RC only after those gates close and the feature set is
+believed complete.
 
 The package does not currently advertise the `astro-integration` discovery
 keyword because `astro add` invokes a zero-argument default factory and this

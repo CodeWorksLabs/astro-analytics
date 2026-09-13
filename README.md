@@ -2,12 +2,11 @@
 
 `@codeworkslabs/astro-analytics` is an experimental reusable analytics
 integration for Astro. Its source is public. The current version is the
-source-tagged `0.1.0-alpha.8` candidate and is not published to npm.
+source-tagged `0.1.0-alpha.9` candidate and is not published to npm.
 
 > [!IMPORTANT]
-> Milestone 2 includes real Fathom, Plausible, Google Analytics 4, and Matomo
-> adapters. Umami remains approved for the first stable provider set but is not
-> implemented in alpha.8. Deferred/external consent activation is not
+> Milestone 2 includes real Fathom, Plausible, Google Analytics 4, Matomo, and
+> Umami adapters. Deferred/external consent activation is not
 > implemented, and this alpha is not yet a
 > general production analytics release.
 
@@ -45,10 +44,10 @@ bounded event helper to `fathom.trackEvent()`.
 The package currently provides:
 
 - strict runtime normalization for disabled, Google Analytics, Plausible,
-  Fathom, and Matomo provider configuration;
+  Fathom, Matomo, and Umami provider configuration;
 - explicit production, preview, and development enablement;
 - HTTPS-only validation for configurable script and event endpoints;
-- real Fathom, Plausible, Google Analytics 4, and Matomo pageview and event adapters;
+- real Fathom, Plausible, Google Analytics 4, Matomo, and Umami pageview and event adapters;
 - an optional event client enabled only by `events: true`;
 - a provider registry for simultaneous analytics sources;
 - a non-throwing `track()` helper with bounded event names, properties, and
@@ -60,7 +59,7 @@ The package currently provides:
 
 `events: false` and an omitted `events` option install no package event global,
 but enabled Fathom, Plausible, immediate-consent GA4, and immediate-consent
-Matomo providers still load for pageview analytics.
+Matomo, and Umami providers still load for pageview analytics.
 `events: true` installs a frozen, package-owned client. Each configured provider
 returns its own result. Fathom returns `adapter-not-loaded` until its verified
 browser API is ready, then dispatches through `fathom.trackEvent()` without
@@ -78,8 +77,15 @@ category/action pair. Optional `_name` and `_value` properties fill Matomo's
 event-name and event-value positions; other validated properties are not sent
 to Matomo. With `pageviews: "none"`, Astro navigation still refreshes Matomo's
 URL, title, and virtual-referrer context so later events are attributed to the
-last completed route, but no automatic pageview is sent. Umami remains the next
-planned adapter.
+last completed route, but no automatic pageview is sent.
+
+Umami loads its public tracker with automatic pageviews disabled and sends
+an ordinary document's initial pageview after DOM readiness and ClientRouter
+pageviews after Astro's page-load completion signal. Pageviews and custom events
+use payload factories so URL, title, and referrer always come from the same
+completed Astro route, including `pageviews: "none"`. At most 50 custom
+properties are forwarded. Umami's 50-character event-name, 500-character
+string-value, and four-decimal numeric boundaries are enforced per provider.
 
 ## Documentation
 
