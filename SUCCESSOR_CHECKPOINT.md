@@ -2389,3 +2389,24 @@ qualification still pending. This documentation-only reconciliation did not
 change any shipped package member or test. The full `npm run verify` gate again
 passed all 140 tests and strict TypeScript checking, and `git diff --check`
 again passed. The R4 artifact and runtime hashes above remain exact.
+
+### Tag-archive identity correction
+
+The preceding sentence that the release-status reconciliation changed no
+shipped package member is incorrect. npm always includes the root README, and
+this package also explicitly includes `docs/`; the final wording therefore
+changed four documentation members while leaving every runtime, type, test,
+dependency, export, and manifest member unchanged. The immutable public tag
+must be qualified using the archive packed from actual tag commit
+`43473be89dd9e29144c92f3ac0f6e6ab0776f104`, not the pre-tag R4 archive:
+
+`C:\Users\Owner\AppData\Local\Temp\astro-analytics-alpha9-tag-43473be\codeworkslabs-astro-analytics-0.1.0-alpha.9.tgz`
+
+The tag archive contains the same 19 intended members, is 45,298 bytes, has
+SHA-256
+`0F52A54583AB7A875BEC39B55E2B1095B872D47C712588335B634B8EC9AE253A`, npm
+SHA-1 `deaec6489bd04f65ceb3d33e7f3af3f75afd8a96`, and integrity
+`sha512-tQOoC/1EadcOP0sHjhGbD0ecI0HzJsONFXyP/pJzk6+hygbeEn/y6d73DQryOYuFE92UucJF0t/qWN56NkcaGQ==`.
+The canonical sandboxes are being bound to this exact tag-built artifact. A
+localized Code Reviewer tag/archive closure and a visible internal committed
+review were opened against the immutable tag identity.
