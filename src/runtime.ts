@@ -69,6 +69,14 @@ export interface UmamiRuntimeOptions {
   websiteId: string;
 }
 
+function serializeRuntimeOptions(options: unknown): string {
+  const json = JSON.stringify(options);
+  return `JSON.parse(${JSON.stringify(json)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029")})`;
+}
+
 export function createBootstrapScript(
   options: AnalyticsRuntimeOptions = {
     events: true,
@@ -76,7 +84,7 @@ export function createBootstrapScript(
     runtimeToken: "test-runtime-token",
   },
 ): string {
-  const serializedOptions = JSON.stringify(options);
+  const serializedOptions = serializeRuntimeOptions(options);
   return `(() => {
   "use strict";
   const config = ${serializedOptions};
@@ -316,7 +324,7 @@ export function createBootstrapScript(
 export function createFathomBootstrapScript(
   options: FathomRuntimeOptions,
 ): string {
-  const serializedOptions = JSON.stringify(options);
+  const serializedOptions = serializeRuntimeOptions(options);
   return `(() => {
   "use strict";
   const config = ${serializedOptions};
@@ -932,7 +940,7 @@ export function createFathomBootstrapScript(
 export function createPlausibleBootstrapScript(
   options: PlausibleRuntimeOptions,
 ): string {
-  const serializedOptions = JSON.stringify(options);
+  const serializedOptions = serializeRuntimeOptions(options);
   return `(() => {
   "use strict";
   const config = ${serializedOptions};
@@ -1347,7 +1355,7 @@ export function createPlausibleBootstrapScript(
 export function createGoogleAnalyticsBootstrapScript(
   options: GoogleAnalyticsRuntimeOptions,
 ): string {
-  const serializedOptions = JSON.stringify(options);
+  const serializedOptions = serializeRuntimeOptions(options);
   return `(() => {
   "use strict";
   const config = ${serializedOptions};
@@ -1780,7 +1788,7 @@ export function createGoogleAnalyticsBootstrapScript(
 export function createMatomoBootstrapScript(
   options: MatomoRuntimeOptions,
 ): string {
-  const serializedOptions = JSON.stringify(options);
+  const serializedOptions = serializeRuntimeOptions(options);
   return `(() => {
   "use strict";
   const config = ${serializedOptions};
@@ -2269,7 +2277,7 @@ export function createMatomoBootstrapScript(
 export function createUmamiBootstrapScript(
   options: UmamiRuntimeOptions,
 ): string {
-  const serializedOptions = JSON.stringify(options);
+  const serializedOptions = serializeRuntimeOptions(options);
   return `(() => {
   "use strict";
   const config = ${serializedOptions};

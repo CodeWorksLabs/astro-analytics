@@ -14,20 +14,24 @@ consumer qualification on September 13, 2026: Astro 7.3.2 and Starlight 0.42.0
 with Astro 7.3.2, both on Node.js 22.22.2.
 Starlight 0.41.11 with Astro 7.3.2 was qualified for alpha.3 on September 11,
 2026; it remains peer-eligible, but that historical result is not current
-alpha.13 execution evidence. Other versions admitted by the bounded peer ranges
+alpha.14 execution evidence. Other versions admitted by the bounded peer ranges
 are not yet compatibility claims.
 
 ## Current line
 
-The current Milestone 2 candidate is `0.1.0-alpha.13`:
+The current Milestone 2 candidate is `0.1.0-alpha.14`:
 
 - `0.1.0` identifies the first pre-stable feature line.
 - `alpha` states that the package is incomplete and not production-ready.
+- `.14` preserves normalized GA4 configuration as data—including reserved own
+  property names—through inline bootstrap serialization. It also corrects
+  repository-visibility documentation. Exact-package consumer qualification
+  and replacement review determine its disposition.
 - `.13` identifies the correction for exact Fathom vendor/method provenance,
   failure-gap invalidation, same-URL in-flight protection, empty-referrer
   handling, partial setup cleanup, and reproducible package/CI controls.
-  Exact-package consumer qualification and replacement review determine its
-  disposition.
+  Its product-runtime gates passed, but complete-family review found the GA4
+  serialization defect and blocking sandbox journey behavior; it is superseded.
 - `.12` identifies the doctrine-complete F1 correction: lifecycle fallback and
   `none`-mode reentry, virtual referrers, exact script/global provenance,
   non-destructive cleanup, and hardened sandbox receipt behavior. Its F2 review

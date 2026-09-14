@@ -7,6 +7,15 @@ release claim.
 
 ## Unreleased
 
+## 0.1.0-alpha.14 - Candidate
+
+- Preserve GA4 configuration as parsed data through generated inline bootstrap
+  code, including reserved own property names such as `__proto__`.
+- Escape inline-script terminators in serialized runtime options and add a
+  runtime regression proving both properties.
+- Correct repository-visibility and current-candidate documentation after the
+  alpha.13 complete-family review.
+
 ## 0.1.0-alpha.13 - Candidate
 
 - Bind Fathom readiness and event acceptance to the exact load-proven vendor

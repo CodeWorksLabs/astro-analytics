@@ -1,8 +1,47 @@
 # Analytics for Astro Handoff Checkpoint
 
-Updated: 2026-09-13
+Updated: 2026-09-14
 
-## Active doctrine-complete alpha.13 correction — 2026-09-13
+## Active alpha.14 correction after F3 review — 2026-09-14
+
+Exact alpha.13 product freeze `561f1a2f2e59a310a4516572a0457e9aa609eb89`
+passed its product runtime, package, artifact, audit, and hosted-CI gates. The
+external doctrine-complete F3 review blocked the complete family because both
+sandbox journey implementations could commit an abandoned attempt during a
+later unrelated `pagehide`, report success before durable one-time consumption,
+and accept repeat activation while visibly locked. The internal review was
+interrupted by a Phil-directed hold for the shared Brand Navigation docs
+pipeline, but independently confirmed those sandbox defects and additionally
+found the broken global-npm bootstrap in both sandbox workflows and a GA4
+reserved-key serialization defect. It therefore did not issue a final F3
+disposition.
+
+New Bridge Boss and Brand Navigation supervised the separate shared docs-site
+pipeline correction. The accepted local docs commit is `e215ec8`; ordinary
+builds now verify committed Brand Navigation inputs offline. Analytics must not
+modify that pipeline. The docs site remains unpushed because the preserved
+Analytics snapshot falsely calls the public product repository private.
+
+The working product is now `0.1.0-alpha.14`. Runtime bootstrap options are
+revived from escaped JSON data so normalized GA4 configuration preserves own
+reserved names such as `__proto__`, and inline script terminators cannot escape
+configuration. The product documentation now states the repository's actual
+public visibility. Both sandbox journeys use a destination URL nonce correlated
+with the same-tab receipt; the destination strips the nonce and consumes the
+receipt before showing success. The old pagehide commit mechanism is removed,
+locked activation is enforced in the handler, and both workflows use Corepack
+to activate npm 11.12.1.
+
+Current work is not yet a freeze. Required next actions are: complete local
+gates; commit and push the product correction to its own `main`; verify hosted
+CI; pack and prove the exact alpha.14 artifact; bind and commit each sandbox
+locally without pushing; regenerate the ten Analytics docs pages and manifest
+on top of `e215ec8`; complete the docs consumer gate; refresh exact checkpoints;
+and launch simultaneous internal/external replacement review. No sandbox or
+docs push, deployment, npm publication, tag, GitHub Release, or provider action
+is authorized.
+
+## Historical doctrine-complete alpha.13 correction — 2026-09-13
 
 The simultaneous F2 review of exact alpha.12 commit
 `da6843ab0be4babc3886ddd5e48b0addd0325d4e` was blocking. Both reviews found
@@ -46,10 +85,10 @@ internal reviewer and the external Code Reviewer task. Iterate corrections,
 commits, and product pushes until both reviews return a non-blocking
 disposition.
 
-Before documentation synchronization, the source was found to retain stale
-claims that the now-private product repository was public. Those claims are
-being corrected in the product source before the next exact freeze; regenerate
-and rebind the artifact because shipped documentation bytes will change.
+Before documentation synchronization, the source was incorrectly changed to
+claim that the public product repository was private. The F3 review confirmed
+the contradiction against GitHub metadata; alpha.14 corrects the product source
+before regenerating the public documentation snapshot.
 
 The subsequent documentation pass also found alpha.12 status prose within the
 shipped product guides. The final alpha.13 source replaces those stale labels

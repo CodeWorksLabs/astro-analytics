@@ -1934,6 +1934,40 @@ test("Google Analytics setup and asynchronous failures are contained and cleaned
   assert.equal(loadHarness.documentListeners.get("astro:page-load")?.length, 0);
 });
 
+test("Google Analytics preserves reserved config keys as data and escapes inline script terminators", () => {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: Object.assign(harness.document, { referrer: "", title: "Landing" }),
+    location: { href: "https://example.test/landing/" },
+  };
+  const providerConfig = JSON.parse(
+    '{"__proto__":"literal","custom_html":"</script><script>throw new Error(1)</script>"}',
+  ) as Record<string, string>;
+  const scriptSource = createGoogleAnalyticsBootstrapScript({
+    consentMode: "immediate",
+    events: false,
+    measurementId: "G-TEST123",
+    pageviews: "none",
+    runtimeToken: "test-runtime-token",
+    scriptSrc: "https://www.googletagmanager.com/gtag/js?id=G-TEST123",
+    config: providerConfig,
+  });
+
+  assert.equal(scriptSource.includes("</script>"), false);
+  executeGoogleAnalyticsBootstrap(context, {
+    config: providerConfig,
+    events: false,
+    pageviews: "none",
+  });
+
+  const configCommand = serializeGtagCommand(context.dataLayer[2]);
+  const forwarded = configCommand[2] as Record<string, unknown>;
+  assert.equal(Object.hasOwn(forwarded, "__proto__"), true);
+  assert.equal(forwarded["__proto__"], "literal");
+  assert.equal(forwarded.custom_html, "</script><script>throw new Error(1)</script>");
+  assert.equal(forwarded.send_page_view, false);
+});
+
 test("Fathom waits for an observed completion after page-load observer recovery", () => {
   const harness = createDocumentHarness();
   const originalAddEventListener = harness.document.addEventListener;
