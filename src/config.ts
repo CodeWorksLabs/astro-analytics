@@ -597,6 +597,11 @@ function normalizeBlockedQueryParameters(value: unknown): readonly string[] {
   if (value.length > 32) {
     throw new TypeError("configuration.blockedQueryParameters must contain at most 32 names.");
   }
+  for (let index = 0; index < value.length; index += 1) {
+    if (!Object.prototype.hasOwnProperty.call(value, index)) {
+      throw new TypeError("configuration.blockedQueryParameters must not be sparse.");
+    }
+  }
   const names = value.map((entry, index) => {
     const name = expectString(entry, `configuration.blockedQueryParameters[${index}]`);
     if (name.length === 0 || name.length > 128 || name.trim() !== name) {

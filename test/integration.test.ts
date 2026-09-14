@@ -410,12 +410,115 @@ test("blocked query parameters stop the complete runtime before initialization",
   );
   assert.equal(injected.length, 1);
   const script = (injected[0] ?? "").replace(/^page:/, "");
-  const context = {
+  const harness = createDocumentHarness();
+  const context: vm.Context = {
+    document: harness.document,
     location: { href: "https://example.test/analytics/next/?keep=yes&cwl_journey=secret#result" },
+    URL,
   };
   vm.runInNewContext(script, context, { timeout: 1_000 });
   assert.equal(Reflect.has(context, "astroAnalytics"), false);
-  assert.equal(Reflect.has(context, "document"), false);
+  assert.equal(harness.appended.length, 0);
+  assert.equal(harness.documentListeners.get("astro:page-load")?.length, 1);
+
+  context.location.href = "https://example.test/analytics/next/";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.deepEqual(Array.from(context.astroAnalytics.providers), ["fathom"]);
+  assert.equal(harness.appended.length, 1);
+});
+
+test("blocked query policy suspends every provider lifecycle and resumes from a clean baseline", () => {
+  const injected: string[] = [];
+  runSetup(astroAnalytics({
+    blockedQueryParameters: ["cwl_journey"],
+    events: true,
+    providers: [
+      { name: "fathom", siteId: "ABCDEFG" },
+      { name: "plausible", scriptSrc: "https://plausible.example/js/pa-TEST.js" },
+      { name: "google-analytics", measurementId: "G-TEST123", consent: { mode: "immediate" } },
+      { name: "matomo", eventCategory: "Astro", siteId: "1", trackerUrl: "https://analytics.example/matomo.php" },
+      { name: "umami", scriptSrc: "https://analytics.example/script.js", websiteId: "e676c9b4-11e4-4ef1-a4d7-87001773e9f2" },
+    ],
+  }), "build", injected);
+
+  const harness = createDocumentHarness();
+  harness.document.querySelector = () => ({});
+  harness.document.referrer = "https://referrer.example/";
+  harness.document.title = "Start";
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/start/" },
+    URL,
+  };
+  vm.runInNewContext(injected[0]?.slice("page:".length) ?? "", context);
+
+  const byId = (id: string) => harness.appended.find((script) => script.id === id) ?? {};
+  const fathomPageviews: unknown[][] = [];
+  const fathomEvents: string[] = [];
+  activateFathom(context, byId(FATHOM_SCRIPT_ID), {
+    trackEvent(name: string) { fathomEvents.push(name); },
+    trackPageview(...args: unknown[]) { fathomPageviews.push(args); },
+  });
+  const plausibleCalls = activatePlausible(context, byId(PLAUSIBLE_SCRIPT_ID));
+  const googleScript = byId(GOOGLE_ANALYTICS_SCRIPT_ID);
+  (googleScript.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+  const matomoCommands = activateMatomo(context, byId(MATOMO_SCRIPT_ID));
+  const umamiCalls = activateUmami(context, byId(UMAMI_SCRIPT_ID));
+
+  const completeRoute = (href: string, title: string) => {
+    context.location.href = href;
+    harness.document.title = title;
+    for (const listener of harness.documentListeners.get("astro:page-load") ?? []) listener();
+  };
+  completeRoute("https://example.test/start/", "Start");
+  const cleanEventResult = context.astroAnalytics.track("clean_event");
+  assert.equal(cleanEventResult.ok, true, JSON.stringify(cleanEventResult));
+
+  const countsBeforeBlocked = {
+    fathomEvents: fathomEvents.length,
+    fathomPageviews: fathomPageviews.length,
+    ga: context.dataLayer.length,
+    matomo: matomoCommands.length,
+    plausible: plausibleCalls.length,
+    umami: umamiCalls.length,
+  };
+  completeRoute("https://example.test/private/?cwl_journey=secret", "Private");
+  assert.equal(context.astroAnalytics.track("blocked_event").reason, "adapter-not-loaded");
+  assert.deepEqual({
+    fathomEvents: fathomEvents.length,
+    fathomPageviews: fathomPageviews.length,
+    ga: context.dataLayer.length,
+    matomo: matomoCommands.length,
+    plausible: plausibleCalls.length,
+    umami: umamiCalls.length,
+  }, countsBeforeBlocked);
+
+  completeRoute("https://example.test/recovered/", "Recovered");
+  assert.deepEqual({
+    fathomEvents: fathomEvents.length,
+    fathomPageviews: fathomPageviews.length,
+    ga: context.dataLayer.length,
+    matomo: matomoCommands.length,
+    plausible: plausibleCalls.length,
+    umami: umamiCalls.length,
+  }, countsBeforeBlocked);
+
+  completeRoute("https://example.test/next/", "Next");
+  assert.equal(context.astroAnalytics.track("recovered_event").ok, true);
+  const emitted = JSON.stringify({
+    fathomPageviews,
+    ga: context.dataLayer,
+    matomoCommands,
+    plausibleCalls,
+    umamiCalls,
+  });
+  assert.equal(emitted.includes("cwl_journey"), false);
+  assert.equal(emitted.includes("secret"), false);
+  assert.ok(fathomPageviews.length > countsBeforeBlocked.fathomPageviews);
+  assert.ok(context.dataLayer.length > countsBeforeBlocked.ga);
+  assert.ok(matomoCommands.length > countsBeforeBlocked.matomo);
+  assert.ok(plausibleCalls.length > countsBeforeBlocked.plausible);
+  assert.ok(umamiCalls.length > countsBeforeBlocked.umami);
 });
 
 test("Matomo injects without the optional event client", () => {
@@ -2223,6 +2326,7 @@ test("multi-provider runtime exposes independent adapter outcomes", () => {
   const context: vm.Context = {
     document: harness.document,
     location: { href: "https://example.test/analytics/" },
+    URL,
   };
   vm.runInNewContext(injected[0]?.slice("page:".length) ?? "", context);
   assert.deepEqual(Array.from(context.astroAnalytics.providers), ["fathom", "plausible", "matomo"]);
@@ -2608,7 +2712,11 @@ test("matching Fathom integrations share runtime proof and load one vendor", () 
   assert.deepEqual(secondInjected, firstInjected);
 
   const harness = createDocumentHarness();
-  const context: vm.Context = { document: harness.document };
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/" },
+    URL,
+  };
   vm.runInNewContext(firstInjected[0]?.slice("page:".length) ?? "", context);
   vm.runInNewContext(secondInjected[0]?.slice("page:".length) ?? "", context);
   assert.equal(harness.appended.length, 1);

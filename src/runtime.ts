@@ -7,6 +7,7 @@ export const UMAMI_SCRIPT_ID = "codeworkslabs-astro-analytics-umami";
 
 export interface AnalyticsRuntimeOptions {
   events: boolean;
+  locationPolicyRequired?: boolean;
   providers: readonly string[];
   runtimeToken: string;
 }
@@ -16,6 +17,7 @@ export interface FathomRuntimeOptions {
   consentMode?: "immediate" | "deferred" | "external" | undefined;
   events: boolean;
   honorDnt?: boolean | undefined;
+  locationPolicyRequired?: boolean;
   pageviews: "provider" | "astro" | "none";
   runtimeToken: string;
   scriptSrc: string;
@@ -27,6 +29,7 @@ export interface PlausibleRuntimeOptions {
   consentMode?: "immediate" | "deferred" | "external" | undefined;
   endpoint?: string | undefined;
   events: boolean;
+  locationPolicyRequired?: boolean;
   pageviews: "provider" | "astro" | "none";
   runtimeToken: string;
   scriptSrc: string;
@@ -42,6 +45,7 @@ export interface GoogleAnalyticsRuntimeOptions {
   }> | undefined;
   consentMode: "immediate" | "deferred" | "external";
   events: boolean;
+  locationPolicyRequired?: boolean;
   measurementId: string;
   pageviews: "provider" | "astro" | "none";
   runtimeToken: string;
@@ -52,6 +56,7 @@ export interface MatomoRuntimeOptions {
   consentMode?: "immediate" | "deferred" | "external" | undefined;
   eventCategory: string;
   events: boolean;
+  locationPolicyRequired?: boolean;
   pageviews: "provider" | "astro" | "none";
   runtimeToken: string;
   scriptSrc: string;
@@ -63,6 +68,7 @@ export interface UmamiRuntimeOptions {
   consentMode?: "immediate" | "deferred" | "external" | undefined;
   events: boolean;
   hostUrl?: string | undefined;
+  locationPolicyRequired?: boolean;
   pageviews: "provider" | "astro" | "none";
   runtimeToken: string;
   scriptSrc: string;
@@ -117,6 +123,22 @@ export function createBootstrapScript(
     let configuredProviders = Object.freeze([]);
     let eventsEnabled = config.events === true;
     let installedClient;
+
+    const isLocationAllowed = () => {
+      if (config.locationPolicyRequired !== true) return true;
+      try {
+        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
+        if (typeof policyKey !== "symbol") return false;
+        const policy = Reflect.get(root, policyKey);
+        if ((typeof policy !== "object" && typeof policy !== "function") || policy === null ||
+            Reflect.get(policy, "runtimeToken") !== config.runtimeToken) return false;
+        const keys = Reflect.ownKeys(policy);
+        const allows = Reflect.get(policy, "allowsCurrentLocation");
+        return keys.length === 3 && keys.includes("allowsCurrentLocation") &&
+          keys.includes("blockedQueryParameters") && keys.includes("runtimeToken") &&
+          typeof allows === "function" && Reflect.apply(allows, policy, []) === true;
+      } catch { return false; }
+    };
 
     const normalizeAdapterResult = (value) => {
       try {
@@ -197,6 +219,7 @@ export function createBootstrapScript(
           for (const provider of providerSnapshot) {
             let status = "adapter-not-loaded";
             try {
+              if (!isLocationAllowed()) throw new TypeError("Blocked analytics location");
               const handler = Reflect.get(handlers, provider);
               const handlerStatus = (typeof handler === "object" || typeof handler === "function") && handler !== null
                 ? Reflect.get(handler, "status")
@@ -227,6 +250,21 @@ export function createBootstrapScript(
               ok: false,
               providers: Object.freeze(results),
               reason: "invalid-event",
+            });
+          }
+          if (!isLocationAllowed()) {
+            for (const provider of providerSnapshot) {
+              Reflect.defineProperty(results, provider, {
+                configurable: false,
+                enumerable: true,
+                value: Object.freeze({ ok: false, reason: "adapter-not-loaded" }),
+                writable: false,
+              });
+            }
+            return Object.freeze({
+              ok: false,
+              providers: Object.freeze(results),
+              reason: "adapter-not-loaded",
             });
           }
           let allAccepted = providerSnapshot.length > 0;
@@ -344,6 +382,21 @@ export function createFathomBootstrapScript(
     if (typeof coordinatorKey !== "symbol") return;
     const clientCoordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:client-coordinator:v2"]);
     if (typeof clientCoordinatorKey !== "symbol") return;
+    const isLocationAllowed = () => {
+      if (config.locationPolicyRequired !== true) return true;
+      try {
+        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
+        if (typeof policyKey !== "symbol") return false;
+        const policy = Reflect.get(root, policyKey);
+        const allows = (typeof policy === "object" || typeof policy === "function") && policy !== null
+          ? Reflect.get(policy, "allowsCurrentLocation")
+          : undefined;
+        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
+          Reflect.ownKeys(policy).length === 3 &&
+          Reflect.ownKeys(policy).includes("blockedQueryParameters") && typeof allows === "function" &&
+          Reflect.apply(allows, policy, []) === true;
+      } catch { return false; }
+    };
     try {
       const existingCoordinator = Reflect.get(documentValue, coordinatorKey);
       if ((typeof existingCoordinator === "object" || typeof existingCoordinator === "function") && existingCoordinator !== null &&
@@ -365,6 +418,7 @@ export function createFathomBootstrapScript(
     let lastTrackedCompletion;
     let navigationObservationGap = false;
     let navigationInFlight = false;
+    const requiredLocationPolicy = config.locationPolicyRequired;
     const coordinatorInstallHref = (() => {
       try {
         const href = Reflect.get(Reflect.get(root, "location"), "href");
@@ -372,6 +426,7 @@ export function createFathomBootstrapScript(
       } catch { return undefined; }
     })();
     const run = (config) => {
+    if (config.locationPolicyRequired !== requiredLocationPolicy) return;
     const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
     const isPackageScript = (value) => {
       try {
@@ -675,6 +730,7 @@ export function createFathomBootstrapScript(
       retryPageview() { flushReadyPageviews(); }
     });
     const readHref = () => {
+      if (!isLocationAllowed()) return undefined;
       try {
         const href = Reflect.get(Reflect.get(root, "location"), "href");
         return typeof href === "string" ? href : undefined;
@@ -703,7 +759,7 @@ export function createFathomBootstrapScript(
     let state;
     const sendPageview = (pageview) => {
       try {
-        if (!hasUsableFathom() || pageview === undefined ||
+        if (!isLocationAllowed() || !hasUsableFathom() || pageview === undefined ||
             pageview.completion === lastTrackedCompletion ||
             authenticState !== state) return pageview?.completion === lastTrackedCompletion;
         const options = typeof pageview.referrer === "string" && pageview.referrer.length > 0
@@ -719,7 +775,15 @@ export function createFathomBootstrapScript(
       if (lifecycle.active !== true) return;
       if (authenticState !== state) return;
       const href = readHref();
-      if (typeof href !== "string") return;
+      if (typeof href !== "string") {
+        navigationObservationGap = true;
+        navigationInFlight = false;
+        pendingPageview = undefined;
+        completedNavigationCompletion = undefined;
+        completedNavigationReferrer = undefined;
+        completedNavigationUrl = undefined;
+        return;
+      }
       const closesObservationGap = navigationObservationGap;
       const referrer = closesObservationGap
         ? undefined
@@ -956,6 +1020,21 @@ export function createPlausibleBootstrapScript(
     if (typeof symbolFor !== "function") return;
     const coordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:plausible:v1"]);
     if (typeof coordinatorKey !== "symbol") return;
+    const isLocationAllowed = () => {
+      if (config.locationPolicyRequired !== true) return true;
+      try {
+        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
+        if (typeof policyKey !== "symbol") return false;
+        const policy = Reflect.get(root, policyKey);
+        const allows = (typeof policy === "object" || typeof policy === "function") && policy !== null
+          ? Reflect.get(policy, "allowsCurrentLocation")
+          : undefined;
+        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
+          Reflect.ownKeys(policy).length === 3 &&
+          Reflect.ownKeys(policy).includes("blockedQueryParameters") && typeof allows === "function" &&
+          Reflect.apply(allows, policy, []) === true;
+      } catch { return false; }
+    };
     try {
       const existingCoordinator = Reflect.get(documentValue, coordinatorKey);
       if ((typeof existingCoordinator === "object" || typeof existingCoordinator === "function") && existingCoordinator !== null &&
@@ -981,6 +1060,7 @@ export function createPlausibleBootstrapScript(
     let lastTrackedCompletion;
     let pendingPageview;
     let navigationObservationGap = false;
+    let locationObservationGap = false;
     let requestReferrer;
     let vendorReady = false;
     let vendorClient;
@@ -993,6 +1073,7 @@ export function createPlausibleBootstrapScript(
           Reflect.get(value, "consentMode") === config.consentMode &&
           Reflect.get(value, "endpoint") === config.endpoint &&
           Reflect.get(value, "events") === config.events &&
+          Reflect.get(value, "locationPolicyRequired") === config.locationPolicyRequired &&
           Reflect.get(value, "pageviews") === config.pageviews &&
           Reflect.get(value, "runtimeToken") === config.runtimeToken &&
           Reflect.get(value, "scriptSrc") === config.scriptSrc;
@@ -1012,6 +1093,7 @@ export function createPlausibleBootstrapScript(
       } catch {}
     };
     const readHref = () => {
+      if (!isLocationAllowed()) return undefined;
       try {
         const href = Reflect.get(Reflect.get(root, "location"), "href");
         return typeof href === "string" ? href : undefined;
@@ -1052,7 +1134,7 @@ export function createPlausibleBootstrapScript(
       } catch { return false; }
     };
     const callPlausible = (name, options, referrer) => {
-      if (!hasUsableVendor()) return false;
+      if (!isLocationAllowed() || !hasUsableVendor()) return false;
       const plausible = vendorClient;
       requestReferrer = referrer;
       try {
@@ -1064,7 +1146,7 @@ export function createPlausibleBootstrapScript(
     };
     const sendPageview = (pageview) => {
       try {
-        if (!vendorReady || lifecycle?.active !== true || pageview === undefined ||
+        if (!isLocationAllowed() || !vendorReady || lifecycle?.active !== true || pageview === undefined ||
             pageview.completion === lastTrackedCompletion) {
           return pageview?.completion === lastTrackedCompletion;
         }
@@ -1255,8 +1337,15 @@ export function createPlausibleBootstrapScript(
         pageLoadListener = config.pageviews === "none" ? undefined : () => {
           if (activeGeneration !== generation || lifecycle.active !== true) return;
           const href = readHref();
-          if (typeof href !== "string") return;
-          const referrer = navigationObservationGap
+          if (typeof href !== "string") {
+            locationObservationGap = true;
+            pendingPageview = undefined;
+            completedNavigationReferrer = undefined;
+            completedNavigationUrl = undefined;
+            return;
+          }
+          const closesLocationGap = locationObservationGap;
+          const referrer = navigationObservationGap || closesLocationGap
             ? ""
             : typeof completedNavigationUrl === "string"
               ? completedNavigationUrl
@@ -1267,9 +1356,14 @@ export function createPlausibleBootstrapScript(
                   } catch { return ""; }
                 })();
           navigationObservationGap = false;
+          locationObservationGap = false;
           completedNavigationUrl = href;
           completedNavigationReferrer = referrer;
           const pageview = Object.freeze({ completion: ++completionCounter, referrer, url: href });
+          if (closesLocationGap) {
+            pendingPageview = undefined;
+            return;
+          }
           pendingPageview = pageview;
           if (vendorReady && !isPrerendering() && sendPageview(pageview)) pendingPageview = undefined;
         };
@@ -1371,6 +1465,21 @@ export function createGoogleAnalyticsBootstrapScript(
     if (typeof symbolFor !== "function") return;
     const coordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:google-analytics:v1"]);
     if (typeof coordinatorKey !== "symbol") return;
+    const isLocationAllowed = () => {
+      if (config.locationPolicyRequired !== true) return true;
+      try {
+        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
+        if (typeof policyKey !== "symbol") return false;
+        const policy = Reflect.get(root, policyKey);
+        const allows = (typeof policy === "object" || typeof policy === "function") && policy !== null
+          ? Reflect.get(policy, "allowsCurrentLocation")
+          : undefined;
+        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
+          Reflect.ownKeys(policy).length === 3 &&
+          Reflect.ownKeys(policy).includes("blockedQueryParameters") && typeof allows === "function" &&
+          Reflect.apply(allows, policy, []) === true;
+      } catch { return false; }
+    };
     try {
       const existingCoordinator = Reflect.get(documentValue, coordinatorKey);
       if ((typeof existingCoordinator === "object" || typeof existingCoordinator === "function") && existingCoordinator !== null &&
@@ -1400,6 +1509,7 @@ export function createGoogleAnalyticsBootstrapScript(
     let lastTrackedCompletion;
     let pendingPageview;
     let navigationObservationGap = false;
+    let locationObservationGap = false;
     const sameRecord = (left, right) => {
       try {
         if (left === undefined || right === undefined) return left === right;
@@ -1418,6 +1528,7 @@ export function createGoogleAnalyticsBootstrapScript(
           sameRecord(Reflect.get(value, "consentInitial"), config.consentInitial) &&
           Reflect.get(value, "consentMode") === config.consentMode &&
           Reflect.get(value, "events") === config.events &&
+          Reflect.get(value, "locationPolicyRequired") === config.locationPolicyRequired &&
           Reflect.get(value, "measurementId") === config.measurementId &&
           Reflect.get(value, "pageviews") === config.pageviews &&
           Reflect.get(value, "runtimeToken") === config.runtimeToken &&
@@ -1425,6 +1536,7 @@ export function createGoogleAnalyticsBootstrapScript(
       } catch { return false; }
     };
     const readHref = () => {
+      if (!isLocationAllowed()) return undefined;
       try {
         const href = Reflect.get(Reflect.get(root, "location"), "href");
         return typeof href === "string" ? href : undefined;
@@ -1470,14 +1582,14 @@ export function createGoogleAnalyticsBootstrapScript(
       try {
         const gtag = Reflect.get(root, "gtag");
         const dataLayer = Reflect.get(root, "dataLayer");
-        if (!vendorReady || !matchesConfiguredScript() || gtag !== ownedGtag || dataLayer !== ownedDataLayer ||
+        if (!isLocationAllowed() || !vendorReady || !matchesConfiguredScript() || gtag !== ownedGtag || dataLayer !== ownedDataLayer ||
             typeof gtag !== "function" || !Array.isArray(dataLayer)) return false;
         Reflect.apply(gtag, root, args);
         return true;
       } catch { return false; }
     };
     const sendPageview = (pageview, generation) => {
-      if (!active || activeGeneration !== generation || pageview === undefined ||
+      if (!isLocationAllowed() || !active || activeGeneration !== generation || pageview === undefined ||
           pageview.completion === lastTrackedCompletion) {
         return pageview?.completion === lastTrackedCompletion;
       }
@@ -1695,8 +1807,16 @@ export function createGoogleAnalyticsBootstrapScript(
         localPageLoadListener = config.pageviews === "none" ? undefined : () => {
           if (activeGeneration !== generation) return;
           const href = readHref();
-          if (typeof href !== "string") return;
-          const referrer = navigationObservationGap
+          if (typeof href !== "string") {
+            locationObservationGap = true;
+            pendingPageview = undefined;
+            completedNavigationReferrer = undefined;
+            completedNavigationTitle = undefined;
+            completedNavigationUrl = undefined;
+            return;
+          }
+          const closesLocationGap = locationObservationGap;
+          const referrer = navigationObservationGap || closesLocationGap
             ? ""
             : typeof completedNavigationUrl === "string"
               ? completedNavigationUrl
@@ -1707,6 +1827,7 @@ export function createGoogleAnalyticsBootstrapScript(
                   } catch { return ""; }
                 })();
           navigationObservationGap = false;
+          locationObservationGap = false;
           completedNavigationReferrer = referrer;
           completedNavigationUrl = href;
           try {
@@ -1719,6 +1840,10 @@ export function createGoogleAnalyticsBootstrapScript(
             title: completedNavigationTitle,
             url: href,
           });
+          if (closesLocationGap) {
+            pendingPageview = undefined;
+            return;
+          }
           pendingPageview = pageview;
           if (active && vendorReady && !isPrerendering() && sendPageview(pageview, generation)) pendingPageview = undefined;
         };
@@ -1804,6 +1929,21 @@ export function createMatomoBootstrapScript(
     if (typeof symbolFor !== "function") return;
     const coordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:matomo:v1"]);
     if (typeof coordinatorKey !== "symbol") return;
+    const isLocationAllowed = () => {
+      if (config.locationPolicyRequired !== true) return true;
+      try {
+        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
+        if (typeof policyKey !== "symbol") return false;
+        const policy = Reflect.get(root, policyKey);
+        const allows = (typeof policy === "object" || typeof policy === "function") && policy !== null
+          ? Reflect.get(policy, "allowsCurrentLocation")
+          : undefined;
+        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
+          Reflect.ownKeys(policy).length === 3 &&
+          Reflect.ownKeys(policy).includes("blockedQueryParameters") && typeof allows === "function" &&
+          Reflect.apply(allows, policy, []) === true;
+      } catch { return false; }
+    };
     try {
       const existingCoordinator = Reflect.get(documentValue, coordinatorKey);
       if ((typeof existingCoordinator === "object" || typeof existingCoordinator === "function") && existingCoordinator !== null &&
@@ -1845,6 +1985,7 @@ export function createMatomoBootstrapScript(
           Reflect.get(value, "consentMode") === config.consentMode &&
           Reflect.get(value, "eventCategory") === config.eventCategory &&
           Reflect.get(value, "events") === config.events &&
+          Reflect.get(value, "locationPolicyRequired") === config.locationPolicyRequired &&
           Reflect.get(value, "pageviews") === config.pageviews &&
           Reflect.get(value, "runtimeToken") === config.runtimeToken &&
           Reflect.get(value, "scriptSrc") === config.scriptSrc &&
@@ -1853,6 +1994,7 @@ export function createMatomoBootstrapScript(
       } catch { return false; }
     };
     const readHref = () => {
+      if (!isLocationAllowed()) return undefined;
       try {
         const href = Reflect.get(Reflect.get(root, "location"), "href");
         return typeof href === "string" ? href : undefined;
@@ -1931,7 +2073,7 @@ export function createMatomoBootstrapScript(
     const hasUsableVendor = () => vendorReady && matchesOwnedVendor();
     const callQueue = (command) => {
       try {
-        if (!hasUsableVendor()) return false;
+        if (!isLocationAllowed() || !hasUsableVendor()) return false;
         const queue = Reflect.get(root, "_paq");
         const push = Reflect.get(queue, "push");
         Reflect.apply(push, queue, [command]);
@@ -2005,7 +2147,17 @@ export function createMatomoBootstrapScript(
     };
     const recordCompletedNavigation = () => {
       const href = readHref();
-      if (typeof href !== "string") return;
+      if (typeof href !== "string") {
+        navigationObservationGap = true;
+        pendingPageviewUrl = undefined;
+        pendingPageviewReferrer = undefined;
+        pendingPageviewCompletion = undefined;
+        completedNavigationUrl = undefined;
+        completedNavigationTitle = undefined;
+        completedNavigationReferrer = undefined;
+        vendorContextCompletion = undefined;
+        return;
+      }
       const closesObservationGap = navigationObservationGap;
       completedNavigationReferrer = closesObservationGap ? null : completedNavigationUrl;
       completedNavigationUrl = href;
@@ -2017,6 +2169,7 @@ export function createMatomoBootstrapScript(
       if (closesObservationGap) {
         navigationObservationGap = false;
         try { run(config); } catch {}
+        return;
       }
       if (active && typeof activeGeneration === "number" && vendorReady) {
         flushCompletedNavigation(activeGeneration);
@@ -2293,6 +2446,21 @@ export function createUmamiBootstrapScript(
     if (typeof symbolFor !== "function") return;
     const coordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:umami:v1"]);
     if (typeof coordinatorKey !== "symbol") return;
+    const isLocationAllowed = () => {
+      if (config.locationPolicyRequired !== true) return true;
+      try {
+        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
+        if (typeof policyKey !== "symbol") return false;
+        const policy = Reflect.get(root, policyKey);
+        const allows = (typeof policy === "object" || typeof policy === "function") && policy !== null
+          ? Reflect.get(policy, "allowsCurrentLocation")
+          : undefined;
+        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
+          Reflect.ownKeys(policy).length === 3 &&
+          Reflect.ownKeys(policy).includes("blockedQueryParameters") && typeof allows === "function" &&
+          Reflect.apply(allows, policy, []) === true;
+      } catch { return false; }
+    };
     try {
       const existingCoordinator = Reflect.get(documentValue, coordinatorKey);
       if ((typeof existingCoordinator === "object" || typeof existingCoordinator === "function") && existingCoordinator !== null &&
@@ -2313,6 +2481,7 @@ export function createUmamiBootstrapScript(
     let lifecycle;
     let observerInstalled = false;
     let observationGap = false;
+    let locationObservationGap = false;
     let pendingPageview;
     let completedUrl;
     let completedReferrer;
@@ -2330,6 +2499,7 @@ export function createUmamiBootstrapScript(
           Reflect.get(value, "consentMode") === config.consentMode &&
           Reflect.get(value, "events") === config.events &&
           Reflect.get(value, "hostUrl") === config.hostUrl &&
+          Reflect.get(value, "locationPolicyRequired") === config.locationPolicyRequired &&
           Reflect.get(value, "pageviews") === config.pageviews &&
           Reflect.get(value, "runtimeToken") === config.runtimeToken &&
           Reflect.get(value, "scriptSrc") === config.scriptSrc &&
@@ -2337,6 +2507,7 @@ export function createUmamiBootstrapScript(
       } catch { return false; }
     };
     const readHref = () => {
+      if (!isLocationAllowed()) return undefined;
       try {
         const href = Reflect.get(Reflect.get(root, "location"), "href");
         return typeof href === "string" ? href : undefined;
@@ -2420,7 +2591,7 @@ export function createUmamiBootstrapScript(
       } catch { return false; }
     };
     const callUmami = (args) => {
-      if (!hasUsableVendor()) return false;
+      if (!isLocationAllowed() || !hasUsableVendor()) return false;
       Reflect.apply(vendorTrack, vendorClient, args);
       return true;
     };
@@ -2451,7 +2622,16 @@ export function createUmamiBootstrapScript(
     };
     const recordPageLoad = () => {
       const href = readHref();
-      if (typeof href !== "string") return;
+      if (typeof href !== "string") {
+        observationGap = true;
+        locationObservationGap = true;
+        pendingPageview = undefined;
+        completedUrl = undefined;
+        completedReferrer = undefined;
+        completedTitle = undefined;
+        return;
+      }
+      const closesLocationGap = locationObservationGap;
       const referrer = observationGap
         ? ""
         : typeof completedUrl === "string"
@@ -2470,6 +2650,8 @@ export function createUmamiBootstrapScript(
       }
       if (observationGap) {
         observationGap = false;
+        locationObservationGap = false;
+        if (closesLocationGap) pendingPageview = undefined;
         try { run(config); } catch {}
         return;
       }

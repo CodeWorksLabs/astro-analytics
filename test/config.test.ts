@@ -328,6 +328,8 @@ test("blocked query parameters are bounded, unique, and frozen", () => {
   rejects({ provider: fathom, blockedQueryParameters: [""] }, /non-empty/);
   rejects({ provider: fathom, blockedQueryParameters: [" padded"] }, /unpadded/);
   rejects({ provider: fathom, blockedQueryParameters: ["same", "same"] }, /duplicates/);
+  rejects({ provider: fathom, blockedQueryParameters: Array(1) }, /must not be sparse/);
+  rejects({ provider: fathom, blockedQueryParameters: ["first", , "third"] }, /must not be sparse/);
   rejects({ provider: fathom, blockedQueryParameters: Array.from({ length: 33 }, (_, index) => `p${index}`) }, /at most 32/);
 });
 

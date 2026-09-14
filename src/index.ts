@@ -34,6 +34,7 @@ export default function astroAnalytics(
         if (config.events) {
           runtimes.push(createBootstrapScript({
             events: true,
+            locationPolicyRequired: true,
             providers: config.providers.map((provider) => provider.name),
             runtimeToken: RUNTIME_TOKEN,
           }));
@@ -45,6 +46,7 @@ export default function astroAnalytics(
               consentMode: provider.consent?.mode,
               events: config.events,
               honorDnt: provider.honorDnt,
+              locationPolicyRequired: true,
               pageviews: provider.pageviews,
               runtimeToken: RUNTIME_TOKEN,
               scriptSrc: provider.scriptSrc ?? "https://cdn.usefathom.com/script.js",
@@ -56,6 +58,7 @@ export default function astroAnalytics(
               consentMode: provider.consent?.mode,
               endpoint: provider.endpoint,
               events: config.events,
+              locationPolicyRequired: true,
               pageviews: provider.pageviews,
               runtimeToken: RUNTIME_TOKEN,
               scriptSrc: provider.scriptSrc,
@@ -66,6 +69,7 @@ export default function astroAnalytics(
               consentInitial: provider.consent.initial,
               consentMode: provider.consent.mode,
               events: config.events,
+              locationPolicyRequired: true,
               measurementId: provider.measurementId,
               pageviews: provider.pageviews,
               runtimeToken: RUNTIME_TOKEN,
@@ -77,6 +81,7 @@ export default function astroAnalytics(
               consentMode: provider.consent?.mode,
               eventCategory: provider.eventCategory,
               events: config.events,
+              locationPolicyRequired: true,
               pageviews: provider.pageviews,
               runtimeToken: RUNTIME_TOKEN,
               scriptSrc: provider.scriptSrc ?? new URL("matomo.js", provider.trackerUrl).href,
@@ -88,6 +93,7 @@ export default function astroAnalytics(
               consentMode: provider.consent?.mode,
               events: config.events,
               hostUrl: provider.hostUrl,
+              locationPolicyRequired: true,
               pageviews: provider.pageviews,
               runtimeToken: RUNTIME_TOKEN,
               scriptSrc: provider.scriptSrc,
@@ -97,15 +103,11 @@ export default function astroAnalytics(
         }
         if (runtimes.length === 0) return;
         const runtime = runtimes.join("\n");
-        if (config.blockedQueryParameters.length === 0) {
-          injectScript("page", runtime);
-        } else {
-          const names = JSON.stringify(config.blockedQueryParameters)
-            .replaceAll("<", "\\u003c")
-            .replaceAll(">", "\\u003e")
-            .replaceAll("&", "\\u0026");
-          injectScript("page", `(()=>{let allowed=false;try{const href=Reflect.get(globalThis,"location").href;const url=new URL(href);allowed=!${names}.some((name)=>url.searchParams.has(name));}catch{}if(!allowed)return;${runtime}})();`);
-        }
+        const names = JSON.stringify(config.blockedQueryParameters)
+          .replaceAll("<", "\\u003c")
+          .replaceAll(">", "\\u003e")
+          .replaceAll("&", "\\u0026");
+        injectScript("page", `(()=>{const root=globalThis;const token=${JSON.stringify(RUNTIME_TOKEN)};const configuredNames=Object.freeze(${names});let started=false;let listener;try{const symbolValue=Reflect.get(root,"Symbol");const symbolFor=Reflect.get(symbolValue,"for");if(typeof symbolFor!=="function")return;const key=Reflect.apply(symbolFor,symbolValue,["codeworkslabs.astro-analytics:location-policy:v1"]);if(typeof key!=="symbol")return;let policy;const existing=Reflect.get(root,key);if(existing!==undefined){if((typeof existing!=="object"&&typeof existing!=="function")||existing===null)return;const keys=Reflect.ownKeys(existing);const existingNames=Reflect.get(existing,"blockedQueryParameters");if(keys.length!==3||!keys.includes("allowsCurrentLocation")||!keys.includes("blockedQueryParameters")||!keys.includes("runtimeToken")||Reflect.get(existing,"runtimeToken")!==token||typeof Reflect.get(existing,"allowsCurrentLocation")!=="function"||!Array.isArray(existingNames)||existingNames.length!==configuredNames.length||!existingNames.every((name,index)=>name===configuredNames[index]))return;policy=existing;}else{const allowsConfiguredLocation=()=>{try{const URLValue=Reflect.get(root,"URL");if(typeof URLValue!=="function")return false;const href=Reflect.get(Reflect.get(root,"location"),"href");const url=new URLValue(href);return !configuredNames.some((name)=>url.searchParams.has(name));}catch{return false;}};const candidate=Object.freeze({allowsCurrentLocation:allowsConfiguredLocation,blockedQueryParameters:configuredNames,runtimeToken:token});if(Reflect.defineProperty(root,key,{configurable:false,value:candidate,writable:false})!==true||Reflect.get(root,key)!==candidate)return;policy=candidate;}const allows=()=>{try{return Reflect.apply(Reflect.get(policy,"allowsCurrentLocation"),policy,[])===true;}catch{return false;}};const start=()=>{if(started||!allows())return;started=true;if(listener!==undefined){try{const documentValue=Reflect.get(root,"document");const remove=Reflect.get(documentValue,"removeEventListener");if(typeof remove==="function")Reflect.apply(remove,documentValue,["astro:page-load",listener]);}catch{}}${runtime}};if(allows()){start();return;}const documentValue=Reflect.get(root,"document");const add=Reflect.get(documentValue,"addEventListener");if(typeof add!=="function")return;listener=()=>{start();};Reflect.apply(add,documentValue,["astro:page-load",listener]);}catch{}})();`);
         injected = true;
       },
     },

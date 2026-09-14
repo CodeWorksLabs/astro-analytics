@@ -7,6 +7,14 @@ release claim.
 
 ## Unreleased
 
+## 0.1.0-alpha.18 - Candidate
+
+- Enforce blocked-query privacy throughout ClientRouter navigation, provider
+  readiness, prerender activation, event dispatch, and virtual-referrer state.
+- Reject sparse blocked-parameter arrays and add real five-provider lifecycle
+  coverage with clean recovery after a blocked route.
+- Bind sandbox journey-expiry callbacks to their originating pending receipt.
+
 ## 0.1.0-alpha.17 - Candidate
 
 - Add a fail-closed `blockedQueryParameters` boundary that suppresses the
