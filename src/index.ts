@@ -96,7 +96,16 @@ export default function astroAnalytics(
           }
         }
         if (runtimes.length === 0) return;
-        injectScript("page", runtimes.join("\n"));
+        const runtime = runtimes.join("\n");
+        if (config.blockedQueryParameters.length === 0) {
+          injectScript("page", runtime);
+        } else {
+          const names = JSON.stringify(config.blockedQueryParameters)
+            .replaceAll("<", "\\u003c")
+            .replaceAll(">", "\\u003e")
+            .replaceAll("&", "\\u0026");
+          injectScript("page", `(()=>{let allowed=false;try{const href=Reflect.get(globalThis,"location").href;const url=new URL(href);allowed=!${names}.some((name)=>url.searchParams.has(name));}catch{}if(!allowed)return;${runtime}})();`);
+        }
         injected = true;
       },
     },

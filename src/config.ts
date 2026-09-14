@@ -90,6 +90,8 @@ export interface AstroAnalyticsConfig {
   provider?: false | AnalyticsProvider;
   providers?: false | readonly AnalyticsProvider[];
   events?: boolean | EventOptions;
+  /** Suppress the entire browser runtime when any named query parameter is present. */
+  blockedQueryParameters?: readonly string[];
   debug?: boolean;
 }
 
@@ -100,6 +102,7 @@ export interface NormalizedAstroAnalyticsConfig {
   provider?: false | NormalizedAnalyticsProvider | undefined;
   providers: false | readonly NormalizedAnalyticsProvider[];
   events: boolean;
+  blockedQueryParameters: readonly string[];
   debug: boolean;
 }
 
@@ -587,11 +590,31 @@ function normalizeEvents(value: unknown): boolean {
   return true;
 }
 
+function normalizeBlockedQueryParameters(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) {
+    throw new TypeError("configuration.blockedQueryParameters must be an array.");
+  }
+  if (value.length > 32) {
+    throw new TypeError("configuration.blockedQueryParameters must contain at most 32 names.");
+  }
+  const names = value.map((entry, index) => {
+    const name = expectString(entry, `configuration.blockedQueryParameters[${index}]`);
+    if (name.length === 0 || name.length > 128 || name.trim() !== name) {
+      throw new TypeError(`configuration.blockedQueryParameters[${index}] must be a non-empty, unpadded name of at most 128 characters.`);
+    }
+    return name;
+  });
+  if (new Set(names).size !== names.length) {
+    throw new TypeError("configuration.blockedQueryParameters must not contain duplicates.");
+  }
+  return Object.freeze(names);
+}
+
 export function normalizeConfig(configValue: unknown): NormalizedAstroAnalyticsConfig {
   const config = expectObject(configValue, "astroAnalytics() configuration");
   assertExactKeys(
     config,
-    ["enabled", "environments", "provider", "providers", "events", "debug"],
+    ["enabled", "environments", "provider", "providers", "events", "blockedQueryParameters", "debug"],
     "configuration",
   );
   const hasProvider = hasOwn(config, "provider");
@@ -624,6 +647,9 @@ export function normalizeConfig(configValue: unknown): NormalizedAstroAnalyticsC
     events: hasOwn(config, "events")
       ? normalizeEvents(config.events)
       : false,
+    blockedQueryParameters: hasOwn(config, "blockedQueryParameters")
+      ? normalizeBlockedQueryParameters(config.blockedQueryParameters)
+      : Object.freeze([]),
     debug: hasOwn(config, "debug")
       ? expectBoolean(config.debug, "configuration.debug")
       : false,

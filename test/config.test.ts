@@ -41,6 +41,7 @@ test("disabled provider and defaults are explicit", () => {
   });
   assert.equal(config.enabled, true);
   assert.equal(config.events, false);
+  assert.deepEqual(config.blockedQueryParameters, []);
   assert.equal(config.debug, false);
   assert.equal(config.provider && config.provider.pageviews, "provider");
 });
@@ -317,6 +318,17 @@ test("Fathom validates required and optional branches", () => {
     { provider: { ...fathom, canonical: 1 } },
     /canonical must be a boolean/,
   );
+});
+
+test("blocked query parameters are bounded, unique, and frozen", () => {
+  const config = normalizeConfig({ provider: fathom, blockedQueryParameters: ["cwl_journey", "preview"] });
+  assert.deepEqual(config.blockedQueryParameters, ["cwl_journey", "preview"]);
+  assert.equal(Object.isFrozen(config.blockedQueryParameters), true);
+  rejects({ provider: fathom, blockedQueryParameters: "cwl_journey" }, /must be an array/);
+  rejects({ provider: fathom, blockedQueryParameters: [""] }, /non-empty/);
+  rejects({ provider: fathom, blockedQueryParameters: [" padded"] }, /unpadded/);
+  rejects({ provider: fathom, blockedQueryParameters: ["same", "same"] }, /duplicates/);
+  rejects({ provider: fathom, blockedQueryParameters: Array.from({ length: 33 }, (_, index) => `p${index}`) }, /at most 32/);
 });
 
 test("Matomo validates tracker identity, event category, and consent", () => {

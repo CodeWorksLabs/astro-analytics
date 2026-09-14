@@ -14,15 +14,17 @@ consumer qualification on September 13, 2026: Astro 7.3.2 and Starlight 0.42.0
 with Astro 7.3.2, both on Node.js 22.22.2.
 Starlight 0.41.11 with Astro 7.3.2 was qualified for alpha.3 on September 11,
 2026; it remains peer-eligible, but that historical result is not current
-alpha.16 execution evidence. Other versions admitted by the bounded peer ranges
+alpha.17 execution evidence. Other versions admitted by the bounded peer ranges
 are not yet compatibility claims.
 
 ## Current line
 
-The current Milestone 2 candidate is `0.1.0-alpha.16`:
+The current Milestone 2 candidate is `0.1.0-alpha.17`:
 
 - `0.1.0` identifies the first pre-stable feature line.
 - `alpha` states that the package is incomplete and not production-ready.
+- `.17` adds a pre-initialization privacy boundary for blocked query parameters,
+  corrects the F6 sandbox journey contract, and refreshes shipped version truth.
 - `.16` replaces the noncanonical alpha.15 package bytes with an archive built
   from exact Git-tree content and corrects the operative F5 review record. Its
   package runtime remains unchanged from alpha.14.

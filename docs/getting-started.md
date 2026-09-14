@@ -3,7 +3,7 @@
 ## Status
 
 Analytics for Astro is maintained in a public source repository. The current source candidate
-is `0.1.0-alpha.16`; there is no supported npm
+is `0.1.0-alpha.17`; there is no supported npm
 installation yet.
 
 Milestone 2 implements Fathom, Plausible, Google Analytics 4, Matomo, and Umami
@@ -26,12 +26,12 @@ been tested. The current compatibility gate uses:
 
 Starlight 0.41.11 with Astro 7.3.2 was qualified for the earlier alpha.3
 candidate on September 11, 2026. It remains eligible under the peer range, but
-that historical result is not alpha.16 execution evidence.
+that historical result is not alpha.17 execution evidence.
 
 Astro 5.18.2 and 6.4.8 built successfully with the exact alpha.2 package used
 to establish this boundary, but their production dependency audits contain
 critical upstream Astro advisories. They and Starlight 0.35 through 0.40, whose
-peer requirements select those Astro majors, are excluded from the alpha.16
+peer requirements select those Astro majors, are excluded from the alpha.17
 eligibility range. Future versions matching the bounded peer ranges remain
 eligible, not automatically qualified compatibility claims.
 

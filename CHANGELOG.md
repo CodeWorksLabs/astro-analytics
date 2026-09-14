@@ -7,6 +7,12 @@ release claim.
 
 ## Unreleased
 
+## 0.1.0-alpha.17 - Candidate
+
+- Add a fail-closed `blockedQueryParameters` boundary that suppresses the
+  complete analytics runtime before provider or event-client initialization.
+- Correct the shipped current-version record identified by F6 review.
+
 ## 0.1.0-alpha.16 - Candidate
 
 - Rebuild the immutable candidate archive from canonical Git-tree bytes so

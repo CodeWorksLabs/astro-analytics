@@ -397,6 +397,27 @@ test("Google Analytics injects without the optional event client", () => {
   assert.match(injected[0] ?? "", /G-TEST123/);
 });
 
+test("blocked query parameters stop the complete runtime before initialization", () => {
+  const injected: string[] = [];
+  runSetup(
+    astroAnalytics({
+      provider: { name: "fathom", siteId: "ABCDEFG" },
+      events: true,
+      blockedQueryParameters: ["cwl_journey"],
+    }),
+    "build",
+    injected,
+  );
+  assert.equal(injected.length, 1);
+  const script = (injected[0] ?? "").replace(/^page:/, "");
+  const context = {
+    location: { href: "https://example.test/analytics/next/?keep=yes&cwl_journey=secret#result" },
+  };
+  vm.runInNewContext(script, context, { timeout: 1_000 });
+  assert.equal(Reflect.has(context, "astroAnalytics"), false);
+  assert.equal(Reflect.has(context, "document"), false);
+});
+
 test("Matomo injects without the optional event client", () => {
   const injected: string[] = [];
   runSetup(
