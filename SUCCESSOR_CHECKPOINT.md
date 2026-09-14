@@ -32,14 +32,36 @@ receipt before showing success. The old pagehide commit mechanism is removed,
 locked activation is enforced in the handler, and both workflows use Corepack
 to activate npm 11.12.1.
 
-Current work is not yet a freeze. Required next actions are: complete local
-gates; commit and push the product correction to its own `main`; verify hosted
-CI; pack and prove the exact alpha.14 artifact; bind and commit each sandbox
-locally without pushing; regenerate the ten Analytics docs pages and manifest
-on top of `e215ec8`; complete the docs consumer gate; refresh exact checkpoints;
-and launch simultaneous internal/external replacement review. No sandbox or
-docs push, deployment, npm publication, tag, GitHub Release, or provider action
-is authorized.
+Freeze `AFA-RC-READINESS-20260914-F4` is ready for simultaneous replacement
+review. The package-content commit is
+`dcbec9fbce94c8148de627885f3279ccd50b0f34`, tree
+`fa84f761bbbb9d5b8dab5674f535454dcc090b45`; hosted GitHub Actions run
+`34823535614` passed every step for that exact commit. The canonical artifact is
+49,454 bytes, has SHA-256
+`ae5f21d040e3b02f455234c4096da0be6031f0764e75685cf62621c1fe63a7bd`,
+SHA-1 `47c01270f713c20fe0331f49e055a7e1eadf6718`, npm integrity
+`sha512-Y/5DjhxyuVCUEfMZG4ENSpE4bZ5Ox43IfpKLJAqRcWhvQhm9nNo8aUVRzEJrnbQILKo3dr5OOAYpDw72WD6qSg==`,
+and 19 members with zero Git-tree mismatches.
+
+The exact local-only consumers are Astro commit
+`5a74489494e6e112b3891faf854e743b6e9c7de9`, tree
+`91073618bf47d25ca6fb52c812e30b2d6016b352`; Starlight commit
+`c1582b7bd8599ff8dbe0f322152a16d0027b41ef`, tree
+`f8ae6c0fbeff069aaa74252cf27ef189b29d78d9`; and docs commit
+`fba159345898f2e7ad94643883ad66309a5b64f9`, tree
+`d48291650140ead525701373e904f4caa2e3aaa0`. Each repository is clean. Both
+sandbox exact-archive gates passed clean install, zero production audit,
+five receipt/UI tests, zero Astro diagnostics, build, and Wrangler dry-run. The
+docs exact-archive gate passed clean install, ten-page Analytics verification,
+26 Brand Navigation pipeline tests, offline nine-page verification, zero Astro
+diagnostics, 33-page build, zero production audit, Wrangler dry-run, and an
+unchanged candidate-file ledger.
+
+Next: commit and push this checkpoint-only product update, verify its hosted CI,
+then launch the same doctrine-complete mandate simultaneously with a fresh
+internal reviewer and the external Code Reviewer. No sandbox or docs push,
+deployment, npm publication, tag, GitHub Release, or provider action is
+authorized before non-blocking replacement review and Phil's next decision.
 
 ## Historical doctrine-complete alpha.13 correction — 2026-09-13
 
