@@ -1,7 +1,7 @@
 # Analytics for Astro documentation
 
 These documents describe the npm-unpublished
-`0.1.0-alpha.12` Milestone 2 correction candidate of
+`0.1.0-alpha.13` Milestone 2 correction candidate of
 `@codeworkslabs/astro-analytics`.
 
 Milestone 2 provides real Fathom, Plausible, Google Analytics 4, Matomo, and Umami adapters for
@@ -10,11 +10,10 @@ coordination, exact per-provider outcomes, and provider readiness diagnostics.
 No event queue or runtime consent-transition API is implemented.
 
 All five accepted first-stable providers have implementations. The first
-doctrine-complete alpha.11 freeze found lifecycle, virtual-referrer,
-script-provenance, cleanup, sandbox-receipt, and documentation defects.
-Alpha.12 is the bounded correction candidate. It must complete exact-package
-consumer qualification and simultaneous internal/external review before any RC
-decision.
+doctrine-complete alpha.12 freeze found remaining runtime provenance,
+observation-gap, sandbox-receipt, CI, and documentation defects. Alpha.13 is
+the bounded correction candidate. An RC disposition requires exact-package
+consumer qualification and simultaneous internal/external review.
 
 ## Guides
 

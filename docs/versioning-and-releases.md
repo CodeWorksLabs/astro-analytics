@@ -26,7 +26,8 @@ The current Milestone 2 candidate is `0.1.0-alpha.13`:
 - `.13` identifies the correction for exact Fathom vendor/method provenance,
   failure-gap invalidation, same-URL in-flight protection, empty-referrer
   handling, partial setup cleanup, and reproducible package/CI controls.
-  Exact-package consumer qualification and replacement review are pending.
+  Exact-package consumer qualification and replacement review determine its
+  disposition.
 - `.12` identifies the doctrine-complete F1 correction: lifecycle fallback and
   `none`-mode reentry, virtual referrers, exact script/global provenance,
   non-destructive cleanup, and hardened sandbox receipt behavior. Its F2 review

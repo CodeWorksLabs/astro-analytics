@@ -51,6 +51,11 @@ claims that the now-private product repository was public. Those claims are
 being corrected in the product source before the next exact freeze; regenerate
 and rebind the artifact because shipped documentation bytes will change.
 
+The subsequent documentation pass also found alpha.12 status prose within the
+shipped product guides. The final alpha.13 source replaces those stale labels
+with durable qualification requirements. This is a package-byte change and
+requires one final artifact regeneration and consumer rebind.
+
 ## Historical doctrine-complete alpha.12 correction — 2026-09-13
 
 The alpha.11 freeze received simultaneous internal and external
