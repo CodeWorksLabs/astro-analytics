@@ -56,6 +56,18 @@ shipped product guides. The final alpha.13 source replaces those stale labels
 with durable qualification requirements. This is a package-byte change and
 requires one final artifact regeneration and consumer rebind.
 
+The first hosted CI executions exposed a defective bundled npm in GitHub's
+Node.js 22.22.2 image (`promise-retry` was absent). Product commit
+`debf4d244fcf0a3228839e1acbaefb84d396f778` activates pinned npm 11.12.1
+through Node's bundled Corepack instead of asking the broken npm to overwrite
+itself. GitHub Actions run `34802022578` then passed every workflow step. This
+checkpoint-only successor is the final product identity for the next review
+freeze; the 19-member package payload is unchanged from commit
+`bf7982427937229746c39ed2c3594ba0810a328e`: 49,042 bytes, SHA-256
+`36f213f7c7a4fbc06af29a3eaa1a837e64fadfc1fc475341c0224841d183b4ac`,
+SHA-1 `2073f46d6a8a05815b26fd107a33f0b49b27285d`, and npm integrity
+`sha512-+ciAGDmkC26bFqGFbdfIdKf6qOYTFZNFxr8qADY/TrR4TZnXBoug7zykRk+cpu3sCLmp/xoWQNdzANIMKEf83A==`.
+
 ## Historical doctrine-complete alpha.12 correction — 2026-09-13
 
 The alpha.11 freeze received simultaneous internal and external
