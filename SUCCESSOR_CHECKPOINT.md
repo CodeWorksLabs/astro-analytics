@@ -28,7 +28,10 @@ The runtime, tests, package version, documentation, LF policy, and pinned CI
 were committed and pushed to the product repository's own `main` as
 `023835d35055bd3b7f7f380d3372cffbc301e29f`. A follow-up checkpoint commit
 removes the two blank EOF lines reported during that commit and records this
-handoff state. Next: pack a canonical tarball from a clean export of the final
+handoff state. Product commit `a9c7d60b4eca51e6ce22aeede48283322b708f2b`
+then corrected both pinned action identities against the authoritative v7.0.1
+and v7.0.0 Git tags; the package payload was unchanged. This checkpoint-only
+successor is the canonical product freeze. Next: pack a canonical tarball from a clean export of the final
 checkpoint commit, prove member bytes against Git blobs, then bind that artifact
 into both sandboxes. Correct the two
 sandbox journey UIs and verification workflows, synchronize and correct the
