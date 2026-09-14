@@ -40,8 +40,8 @@ Navigation tests, offline verification, zero Astro diagnostics, 33-page build,
 and 130-asset Wrangler dry-run passed. Accepted Brand Navigation commit
 `e215ec8` was unchanged.
 
-Next: add final checkpoint-only commits, replay exact-archive gates, freeze
-identities, and launch simultaneous F7 reviews. No sandbox/docs
+Exact final-commit archive gates passed for product, both consumers, and docs.
+Next: freeze closing identities and launch simultaneous F7 reviews. No sandbox/docs
 push, deployment, publication, release, or tag is authorized before a
 nonblocking review and Phil's decision.
 
