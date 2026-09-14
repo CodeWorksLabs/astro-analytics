@@ -2,62 +2,40 @@
 
 Updated: 2026-09-14
 
-## Active alpha.15 correction after F4 review — 2026-09-14
+## Active alpha.16 correction after F5 review — 2026-09-14
 
-Simultaneous doctrine-complete F4 reviews agreed that the alpha.14 product
-runtime, tests, canonical artifact, dependency, CI, and offline documentation
-pipeline gates were nonblocking. They blocked the complete family because both
-sandbox destinations accepted malformed or contradictory provider-result
-envelopes. The external review also classified unverified storage/history
-postconditions as P1. The internal review found that the URL nonce could reach
-provider pageviews before body-end cleanup and that the Analytics docs verifier
-accepted extra unmanifested pages. Both identified stale operative records.
+The internal F5 review was incomplete after a reviewer-created workspace
+integrity event, but it established three P1 blockers before stopping: failed
+or missing destination-prelude execution could disclose `cwl_journey` to all
+five providers, both sandbox workflows retained the alpha.14 integrity value,
+and the alpha.15 archive contained CRLF working-tree bytes rather than exact
+canonical Git-tree bytes. It also found stale product and sandbox recovery
+records. The external F5 turn ended after only a partial doctrine read and did
+not issue a substantive disposition. No F5 PASS exists.
 
-The working product is now `0.1.0-alpha.15`. Its runtime is byte-identical to
-alpha.14; the new immutable version is required because corrected shipped
-versioning and review-status documentation changes package bytes. Product
-content commit `6cd0ea17fda505abfe4b19a22f380fea9b5d48da`, tree
-`1f19c33d8a5923b5ab7e020497e074ec1e5e8693`, passed strict TypeScript,
-157 tests, a zero-vulnerability production audit, the 19-member package gate,
-and hosted GitHub Actions run `34831525341`.
+The reviewer's eleven exact untracked generated-doc files were removed after
+their origin and paths were verified; no tracked product byte had changed. The
+working product is now `0.1.0-alpha.16`. Its runtime remains byte-identical to
+alpha.14. The new immutable candidate version records corrected shipped status
+and will be packed from a clean Git export, with every package member verified
+against the corresponding Git blob before either sandbox is rebound.
 
-The canonical alpha.15 archive is 50,940 bytes with SHA-256
-`a0d7d221e267c4e7cb422785def2e298df4c2256a4644efd5d3aa2261d843a6f`,
-SHA-1 `f54b3f54d2bac33493da4a40c8504228c76e0e79`, and npm integrity
-`sha512-UD/A4kP3J+xX8FOPTGQ4Vlru6eEgsQqfAFbEz2tMvpShpzszKZt82Xi6Lj0dEydeA8RjrkUzNA5BEGt71TVRBQ==`.
-Both sandboxes bind those exact bytes. Their destination validator now requires
-the exact configured-provider set, exact success/failure shapes, allowed
-failure reasons, coherent aggregate result, and successful selected provider.
-Source persistence, recovery cleanup, and destination URL/storage consumption
-verify observable postconditions before navigation, unlock, or success. A
-blocking destination-head prelude strips the nonce before the Analytics runtime
-module captures the pageview; both exact builds prove that script ordering.
+The grouped consumer correction replaces the fragile destination-head prelude
+with an analytics-free handoff boundary, binds each workflow to one mechanically
+verified artifact identity, and restores the complete documented local recovery
+gate. Product, both consumers, and generated docs must then be committed and
+frozen together, with sandboxes and docs remaining local because pushing each
+repository's own `main` deploys its site.
 
-Functional consumer commits are Astro
-`c6c7b02296ba147947d9e670bd573771123c9bcc`, tree
-`ff9a41df211395d6a79df29a40e9354642a4d620`, and Starlight
-`9aacc00cb69124ce5c79419c039e93dd0f8cc288`, tree
-`9f33b79746a799e258204fdb9dafd6ab1048ac96`. Each exact clean archive passed
-clean install, zero production audit, eight focused tests, zero Astro
-diagnostics, production build, emitted prelude-before-runtime ordering, and
-Wrangler dry-run without deployment.
+Accepted Brand Navigation commit `e215ec8` remains the supplied boundary. Its
+pipeline and content are not part of this correction and must not be reopened.
 
-Docs functional commit `8ba0bd7e0d7cab46f8e476b257eb6ff651d2d188`, tree
-`9d35a4273a018bc8a1ba8ed06620c6ad7bcda4e5`, synchronizes the ten alpha.15
-pages, corrects public-repository and current-state wording, and requires exact
-directory/manifest equality. Nine new Analytics verifier assertions cover
-read-only verification plus extra, missing, tampered, reordered, mismatched,
-and malformed inputs. Its exact clean archive passed those tests, all 26
-accepted Brand Navigation pipeline tests, offline verification, zero Astro
-diagnostics, the 33-page build, zero production audit, and Wrangler dry-run.
-Accepted Brand Navigation commit `e215ec8` and its pipeline were not modified.
-
-Next: commit this checkpoint and the three repository checkpoints, verify the
-product checkpoint-only hosted run, freeze exact final identities, and launch
-the identical doctrine-complete F5 mandate simultaneously with a fresh internal
-reviewer and the external Code Reviewer. Do not push either sandbox or the docs
-repository, because each repository's own `main` deploys its site. No npm
-publication, tag, GitHub Release, deployment, or provider action is authorized.
+Next: complete the alpha.16 grouped correction, run exact clean-export package,
+consumer, docs, and Wrangler dry-run gates, refresh all four checkpoints,
+commit and push the product repository's own `main`, keep sandbox/docs commits
+local, and launch a fresh identical simultaneous internal/external review. No
+npm publication, tag, GitHub Release, sandbox/docs push, deployment, or provider
+action is authorized.
 
 ## Historical doctrine-complete alpha.13 correction — 2026-09-13
 

@@ -7,6 +7,13 @@ release claim.
 
 ## Unreleased
 
+## 0.1.0-alpha.16 - Candidate
+
+- Rebuild the immutable candidate archive from canonical Git-tree bytes so
+  every shipped member is exactly reproducible across checkout platforms.
+- Correct the operative F5 review record while preserving the alpha.14 runtime
+  unchanged.
+
 ## 0.1.0-alpha.15 - Candidate
 
 - Reconcile shipped versioning and review-status documentation with the F4

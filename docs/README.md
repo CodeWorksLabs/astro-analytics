@@ -1,7 +1,7 @@
 # Analytics for Astro documentation
 
 These documents describe the npm-unpublished
-`0.1.0-alpha.15` Milestone 2 correction candidate of
+`0.1.0-alpha.16` Milestone 2 correction candidate of
 `@codeworkslabs/astro-analytics`.
 
 Milestone 2 provides real Fathom, Plausible, Google Analytics 4, Matomo, and Umami adapters for
@@ -16,8 +16,10 @@ closed the product-runtime findings, while its complete-family review found a
 GA4 reserved-key serialization defect and remaining sandbox journey defects.
 Alpha.14 closed the package serialization defect, while F4 confirmed that the
 package runtime and artifact gates passed and identified remaining sandbox and
-operative-record defects. Alpha.15 corrects the shipped current-state record;
-its runtime is unchanged from alpha.14. An RC disposition requires exact-package
+operative-record defects. Alpha.15 corrected the shipped current-state record,
+but its F5 archive was not byte-derived from canonical Git content. Alpha.16
+rebuilds that immutable package identity from Git-tree bytes; its runtime is
+unchanged from alpha.14. An RC disposition requires exact-package
 consumer qualification and simultaneous internal/external review of the complete family.
 
 ## Guides
