@@ -2,7 +2,45 @@
 
 Updated: 2026-09-13
 
-## Active doctrine-complete alpha.11 cycle — 2026-09-13
+## Active doctrine-complete alpha.12 correction — 2026-09-13
+
+The alpha.11 freeze received simultaneous internal and external
+doctrine-complete review under `AFA-RC-READINESS-20260913-F1`. Both reviewers
+blocked that freeze. The shared P1 findings covered event-only reentry sending
+pageviews, inferred ClientRouter startup completions, stale GA4 title/referrer
+context, insufficient proof at external script/global ownership boundaries, and
+cleanup that could remove or overwrite unrelated page state. The external
+review also identified sandbox receipt/bfcache handling, Starlight contrast,
+stale published documentation, and mutable documentation inputs.
+
+The working `0.1.0-alpha.12` correction is uncommitted at this checkpoint. It
+removes synthetic ClientRouter startup completions, preserves exact completed
+navigation identity and virtual-referrer context, keeps `pageviews: "none"`
+event-only across matching reentry, and requires exact configured script and
+load-generation evidence before Fathom, Plausible, GA4, or Matomo can become
+ready. Cleanup now preserves unrelated scripts and globals. Deterministic public
+runtime identifiers are explicitly non-secret coordination labels rather than
+authentication credentials. Focused regressions raise the product suite from
+146 to 151 tests; the latest complete product gate passed strict TypeScript and
+151/151 tests.
+
+Both sandbox repositories contain local, uncommitted receipt, storage-failure,
+bfcache, and Starlight contrast corrections. Each passes `astro check` with no
+diagnostics and a production build. They still consume the prior alpha.11
+artifact and must not be committed as an alpha.12 freeze until rebound to the
+exact packed alpha.12 artifact. The documentation repository still needs to be
+synchronized from the eventual exact product commit and verified. Pushes to
+each sandbox repository's own `main` and the documentation repository's own
+`main` trigger Cloudflare deployments and remain prohibited in this review
+cycle. Product commits and pushes are authorized. Do not deploy, publish to npm,
+create or move a tag, or create a GitHub Release.
+
+After completing all repository gates, record an exact F2 freeze and launch the
+same doctrine mandate simultaneously with the internal reviewer and the Code
+Reviewer task. Iterate corrections, commits, and product pushes until both
+reviews return a non-blocking disposition.
+
+## Historical doctrine-complete alpha.11 cycle — 2026-09-13
 
 Phil commissioned the complete Code Review Doctrine workflow after clarifying
 that earlier focused reviews are not sufficient for the RC gate. The working

@@ -1,5 +1,4 @@
 import type { AstroIntegration } from "astro";
-import { randomUUID } from "node:crypto";
 import {
   isEnabledForCommand,
   normalizeConfig,
@@ -14,7 +13,7 @@ import {
   createUmamiBootstrapScript,
 } from "#runtime";
 
-const RUNTIME_TOKEN = randomUUID();
+const RUNTIME_TOKEN = "astro-analytics:runtime:v1";
 
 export * from "#config";
 export type * from "#adapter-types";

@@ -2,7 +2,7 @@
 
 `@codeworkslabs/astro-analytics` is an experimental reusable analytics
 integration for Astro. Its source is public. The current source candidate is
-`0.1.0-alpha.11` and is not published to npm.
+`0.1.0-alpha.12` and is not published to npm.
 
 > [!IMPORTANT]
 > Milestone 2 includes real Fathom, Plausible, Google Analytics 4, Matomo, and

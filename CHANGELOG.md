@@ -7,6 +7,22 @@ release claim.
 
 ## Unreleased
 
+## 0.1.0-alpha.12 - Candidate
+
+- Remove synthetic initial pageview fallback: ordinary documents establish the
+  initial route at document readiness, while Astro ClientRouter documents wait
+  for their first completed `astro:page-load` lifecycle.
+- Keep `pageviews: "none"` event-only across matching bootstrap reentry and
+  recover from observer gaps only on a newly observed completion.
+- Preserve Fathom and Plausible virtual referrers and GA4's completed-route
+  title/referrer when pre-readiness navigations coalesce.
+- Revalidate exact configured provider-script identity at readiness and send
+  boundaries, and preserve unrelated DOM elements and global replacements
+  during failure cleanup.
+- Replace the process-random runtime token with a deterministic cooperative
+  coordinator protocol identifier and expand lifecycle/provenance regression
+  coverage from 146 to 151 tests.
+
 ## 0.1.0-alpha.11 - Candidate
 
 - Track each completed Astro lifecycle as a distinct pageview across Fathom,

@@ -350,6 +350,12 @@ export function createFathomBootstrapScript(
       }
     } catch { return; }
     let authenticState;
+    let completionCounter = 0;
+    let completedNavigationCompletion;
+    let completedNavigationReferrer;
+    let completedNavigationUrl;
+    let lastTrackedCompletion;
+    let navigationObservationGap = false;
     const coordinatorInstallHref = (() => {
       try {
         const href = Reflect.get(Reflect.get(root, "location"), "href");
@@ -361,7 +367,7 @@ export function createFathomBootstrapScript(
     const isPackageScript = (value) => {
       try {
         if ((typeof value !== "object" && typeof value !== "function") || value === null ||
-            Reflect.get(value, "isConnected") !== true || Reflect.get(value, "tagName") !== "SCRIPT" ||
+            Reflect.get(value, "ownerDocument") !== documentValue || Reflect.get(value, "tagName") !== "SCRIPT" ||
             Reflect.get(value, "defer") !== true ||
             Reflect.get(value, "async") === true || Reflect.get(value, "noModule") === true) return false;
         const type = Reflect.get(value, "type");
@@ -380,6 +386,25 @@ export function createFathomBootstrapScript(
           Reflect.apply(getAttribute, value, ["data-cwl-pageviews"]) === config.pageviews &&
           Reflect.apply(getAttribute, value, ["data-honor-dnt"]) === (config.honorDnt === true ? "true" : null) &&
           Reflect.apply(getAttribute, value, ["data-canonical"]) === (config.canonical === false ? "false" : null);
+      } catch { return false; }
+    };
+    const matchesConfiguredScript = (value) => {
+      try {
+        if (!isOwnedScript(value) || Reflect.get(value, "id") !== selectedScriptId ||
+            Reflect.get(value, "noModule") !== false) return false;
+        const getAttributeNames = Reflect.get(value, "getAttributeNames");
+        const getElementById = Reflect.get(documentValue, "getElementById");
+        if (typeof getAttributeNames !== "function" || typeof getElementById !== "function") return false;
+        const connected = Reflect.get(value, "isConnected") === true;
+        const boundScript = Reflect.apply(getElementById, documentValue, [selectedScriptId]);
+        if (connected ? boundScript !== value : boundScript !== null) return false;
+        const names = Reflect.apply(getAttributeNames, value, []);
+        if (!Array.isArray(names)) return false;
+        const dataNames = names.filter((name) => typeof name === "string" && name.startsWith("data-"));
+        const expected = ["data-auto", "data-cwl-astro-analytics", "data-cwl-pageviews", "data-site"];
+        if (config.honorDnt === true) expected.push("data-honor-dnt");
+        if (config.canonical === false) expected.push("data-canonical");
+        return dataNames.length === expected.length && expected.every((name) => dataNames.includes(name));
       } catch { return false; }
     };
     let previousState;
@@ -508,7 +533,21 @@ export function createFathomBootstrapScript(
     const getById = (id) => Reflect.apply(getElementById, documentValue, [id]);
     let selectedScriptId;
     let reusableScript;
-    for (let index = 0; index <= 100; index += 1) {
+    try {
+      if (isOwnedScript(previousScript) && Reflect.get(previousScript, "isConnected") !== true) {
+        if (Reflect.get(previousReadiness, "ready") === true) {
+          const previousId = Reflect.get(previousScript, "id");
+          if (typeof previousId === "string" && getById(previousId) === null) {
+            selectedScriptId = previousId;
+            reusableScript = previousScript;
+          }
+        } else {
+          const abort = Reflect.get(previousReadiness, "abort");
+          if (typeof abort === "function") Reflect.apply(abort, previousReadiness, []);
+        }
+      }
+    } catch {}
+    for (let index = 0; reusableScript === undefined && index <= 100; index += 1) {
       const candidateId = index === 0 ? scriptId : scriptId + "-owned" + (index === 1 ? "" : "-" + index);
       const candidate = getById(candidateId);
       if (isOwnedScript(candidate)) {
@@ -517,16 +556,9 @@ export function createFathomBootstrapScript(
           reusableScript = candidate;
           break;
         }
-        try {
-          const remove = Reflect.get(candidate, "remove");
-          if (typeof remove !== "function") return;
-          Reflect.apply(remove, candidate, []);
-          if (Reflect.get(candidate, "isConnected") === true) return;
-          if (selectedScriptId === undefined) selectedScriptId = candidateId;
-        } catch { return; }
         continue;
       }
-      if (isPackageScript(candidate)) return;
+      if (isPackageScript(candidate)) continue;
       if ((candidate === null || candidate === undefined) && selectedScriptId === undefined) {
         selectedScriptId = candidateId;
       }
@@ -577,18 +609,44 @@ export function createFathomBootstrapScript(
       Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-canonical", "false"]);
     }
     Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-auto", "false"]);
-    let installHref;
-    try {
-      const previousInstallHref = Reflect.get(previousReadiness, "installHref");
-      installHref = typeof previousInstallHref === "string"
-        ? previousInstallHref
-        : coordinatorInstallHref;
-    } catch {
-      installHref = coordinatorInstallHref;
-    }
-    let completionCounter = 0;
-    let lastTrackedCompletion;
-    let pendingPageview;
+    if (Reflect.getOwnPropertyDescriptor(root, "fathom") !== undefined) return;
+    let bindingValue;
+    let assignedFathom;
+    let vendorFathom;
+    let vendorPageview;
+    let vendorEvent;
+    const bindingGet = () => bindingValue;
+    const bindingSet = (value) => {
+      bindingValue = value;
+      try {
+        if (Reflect.get(documentValue, "currentScript") === script && matchesConfiguredScript(script)) assignedFathom = value;
+      } catch {}
+    };
+    if (Reflect.defineProperty(root, "fathom", {
+      configurable: true, enumerable: true, get: bindingGet, set: bindingSet
+    }) !== true) return;
+    const bindingDescriptor = Reflect.getOwnPropertyDescriptor(root, "fathom");
+    if (bindingDescriptor?.get !== bindingGet || bindingDescriptor?.set !== bindingSet) return;
+    const releaseBinding = (ownedValue, preserveOwned) => {
+      try {
+        const descriptor = Reflect.getOwnPropertyDescriptor(root, "fathom");
+        if (descriptor?.get !== bindingGet || descriptor?.set !== bindingSet) return;
+        const currentValue = bindingGet();
+        if (!preserveOwned && currentValue === ownedValue) Reflect.deleteProperty(root, "fathom");
+        else Reflect.defineProperty(root, "fathom", {
+          configurable: true, enumerable: true, value: currentValue, writable: true
+        });
+      } catch {}
+    };
+    const installHref = coordinatorInstallHref;
+    let pendingPageview = typeof completedNavigationCompletion === "number" &&
+      typeof completedNavigationUrl === "string"
+      ? Object.freeze({
+          completion: completedNavigationCompletion,
+          referrer: completedNavigationReferrer,
+          url: completedNavigationUrl,
+        })
+      : undefined;
     let vendorReady = false;
     let readinessVerified = false;
     let eventsEnabled = config.events;
@@ -598,6 +656,7 @@ export function createFathomBootstrapScript(
       get enabled() { return eventsEnabled; }
     });
     const readiness = Object.freeze({
+      abort() { failRuntime(); },
       get installHref() { return installHref; },
       get ready() { return readinessVerified; },
       retryPageview() { flushReadyPageviews(); }
@@ -611,17 +670,26 @@ export function createFathomBootstrapScript(
     const isPrerendering = () => {
       try { return Reflect.get(documentValue, "prerendering") === true; } catch { return false; }
     };
+    const hasUsableFathom = () => {
+      try {
+        const fathom = Reflect.get(root, "fathom");
+        if (!vendorReady || !matchesConfiguredScript(script) || fathom !== vendorFathom ||
+            (typeof fathom !== "object" && typeof fathom !== "function") || fathom === null) return false;
+        if (config.pageviews !== "none" &&
+            (typeof vendorPageview !== "function" || Reflect.get(fathom, "trackPageview") !== vendorPageview)) return false;
+        return true;
+      } catch { return false; }
+    };
     let state;
     const sendPageview = (pageview) => {
       try {
-        if (!vendorReady || pageview === undefined ||
+        if (!hasUsableFathom() || pageview === undefined ||
             pageview.completion === lastTrackedCompletion ||
             authenticState !== state) return pageview?.completion === lastTrackedCompletion;
-        const fathom = Reflect.get(root, "fathom");
-        if ((typeof fathom !== "object" && typeof fathom !== "function") || fathom === null) return false;
-        const trackPageviewMethod = Reflect.get(fathom, "trackPageview");
-        if (typeof trackPageviewMethod !== "function") return false;
-        Reflect.apply(trackPageviewMethod, fathom, []);
+        const options = typeof pageview.referrer === "string"
+          ? { referrer: pageview.referrer }
+          : undefined;
+        Reflect.apply(vendorPageview, vendorFathom, options === undefined ? [] : [options]);
         lastTrackedCompletion = pageview.completion;
         try { Reflect.set(dedupState, "lastTrackedCompletion", pageview.completion); } catch {}
         return true;
@@ -632,7 +700,21 @@ export function createFathomBootstrapScript(
       if (authenticState !== state) return;
       const href = readHref();
       if (typeof href !== "string") return;
-      const pageview = Object.freeze({ completion: ++completionCounter, url: href });
+      const referrer = navigationObservationGap
+        ? ""
+        : typeof completedNavigationUrl === "string"
+          ? completedNavigationUrl
+          : (() => {
+              try {
+                const value = Reflect.get(documentValue, "referrer");
+                return typeof value === "string" ? value : "";
+              } catch { return ""; }
+            })();
+      navigationObservationGap = false;
+      completedNavigationUrl = href;
+      completedNavigationReferrer = referrer;
+      completedNavigationCompletion = ++completionCounter;
+      const pageview = Object.freeze({ completion: completedNavigationCompletion, referrer, url: href });
       if (vendorReady && !isPrerendering()) {
         pendingPageview = pageview;
         if (sendPageview(pageview)) pendingPageview = undefined;
@@ -645,7 +727,7 @@ export function createFathomBootstrapScript(
           if (typeof previousCompletion === "number") previousLastTrackedCompletion = previousCompletion;
       }
     } catch {}
-    lastTrackedCompletion = previousLastTrackedCompletion;
+    if (lastTrackedCompletion === undefined) lastTrackedCompletion = previousLastTrackedCompletion;
     const dedupState = { lastTrackedCompletion };
     state = Object.freeze({ dedupState, events, lifecycle, pageLoadListener, readiness, runtimeToken: config.runtimeToken, script });
     let scriptBound = false;
@@ -656,7 +738,7 @@ export function createFathomBootstrapScript(
         writable: false,
       }) === true && Reflect.get(script, stateKey) === state;
     } catch {}
-    if (!scriptBound) return;
+    if (!scriptBound) { releaseBinding(undefined, false); return; }
     let published = false;
     try {
       published = Reflect.defineProperty(documentValue, stateKey, {
@@ -666,20 +748,19 @@ export function createFathomBootstrapScript(
       }) === true && Reflect.get(documentValue, stateKey) === state;
     } catch {}
     if (!published) {
+      releaseBinding(undefined, false);
       return;
     }
     authenticState = state;
-    installEventClient(lifecycle, false, state, () => vendorReady, () => eventsEnabled);
+    installEventClient(lifecycle, false, state, hasUsableFathom, () => eventsEnabled);
     const flushReadyPageviews = () => {
       if (lifecycle.active !== true || isPrerendering()) return;
       if (authenticState !== state) return;
+      if (config.pageviews === "none" || navigationObservationGap) return;
       const currentHref = readHref();
       const pending = pendingPageview;
       if (pending !== undefined) {
         if (pending.url === currentHref && sendPageview(pending)) pendingPageview = undefined;
-      } else if (currentHref === installHref) {
-        pendingPageview = Object.freeze({ completion: completionCounter, url: currentHref });
-        if (sendPageview(pendingPageview)) pendingPageview = undefined;
       }
     };
     const failRuntime = () => {
@@ -699,6 +780,7 @@ export function createFathomBootstrapScript(
         const remove = Reflect.get(script, "remove");
         if (typeof remove === "function") Reflect.apply(remove, script, []);
       } catch {}
+      releaseBinding(assignedFathom, false);
     };
     if (typeof pageLoadListener === "function") {
       try {
@@ -706,18 +788,50 @@ export function createFathomBootstrapScript(
         if (typeof addEventListener !== "function") throw new TypeError("Astro page-load observer unavailable");
         Reflect.apply(addEventListener, documentValue, ["astro:page-load", pageLoadListener]);
       } catch {
+        navigationObservationGap = true;
         failRuntime();
         return;
+      }
+    }
+    if (config.pageviews !== "none") {
+      const hasClientRouter = (() => {
+        try {
+          const querySelector = Reflect.get(documentValue, "querySelector");
+          return typeof querySelector === "function" &&
+            Reflect.apply(querySelector, documentValue, ['[name="astro-view-transitions-enabled"]']) !== null;
+        } catch { return true; }
+      })();
+      if (!hasClientRouter && !navigationObservationGap && typeof completedNavigationUrl !== "string") {
+        try {
+          const readyState = Reflect.get(documentValue, "readyState");
+          if (readyState === "interactive" || readyState === "complete") {
+            pageLoadListener();
+          } else {
+            const addEventListener = Reflect.get(documentValue, "addEventListener");
+            Reflect.apply(addEventListener, documentValue, ["DOMContentLoaded", pageLoadListener, { once: true }]);
+          }
+        } catch {
+          navigationObservationGap = true;
+          failRuntime();
+          return;
+        }
       }
     }
     const hasRequiredFathomApi = () => {
       try {
         const fathom = Reflect.get(root, "fathom");
-        if ((typeof fathom !== "object" && typeof fathom !== "function") || fathom === null) return false;
+        if (!matchesConfiguredScript(script) || fathom !== assignedFathom ||
+            (typeof fathom !== "object" && typeof fathom !== "function") || fathom === null) return false;
+        const trackPageview = Reflect.get(fathom, "trackPageview");
+        const trackEvent = Reflect.get(fathom, "trackEvent");
         if (config.pageviews !== "none") {
-          return typeof Reflect.get(fathom, "trackPageview") === "function";
+          if (typeof trackPageview !== "function") return false;
         }
-        return config.events !== true || typeof Reflect.get(fathom, "trackEvent") === "function";
+        if (config.pageviews === "none" && config.events === true && typeof trackEvent !== "function") return false;
+        vendorFathom = fathom;
+        vendorPageview = trackPageview;
+        vendorEvent = trackEvent;
+        return true;
       } catch { return false; }
     };
     const activateRuntime = () => {
@@ -729,6 +843,7 @@ export function createFathomBootstrapScript(
       }
       vendorReady = true;
       readinessVerified = true;
+      releaseBinding(vendorFathom, true);
       if (config.pageviews === "none") return;
       if (isPrerendering()) {
         try {
@@ -805,16 +920,15 @@ export function createPlausibleBootstrapScript(
     let lifecycle;
     let pageLoadListener;
     let completionCounter = 0;
+    let completedNavigationReferrer;
+    let completedNavigationUrl;
     let lastTrackedCompletion;
     let pendingPageview;
+    let navigationObservationGap = false;
+    let requestReferrer;
     let vendorReady = false;
     let vendorClient;
-    const installHref = (() => {
-      try {
-        const href = Reflect.get(Reflect.get(root, "location"), "href");
-        return typeof href === "string" ? href : undefined;
-      } catch { return undefined; }
-    })();
+    let vendorScript;
 
     const sameConfig = (value) => {
       try {
@@ -850,12 +964,47 @@ export function createPlausibleBootstrapScript(
     const isPrerendering = () => {
       try { return Reflect.get(documentValue, "prerendering") === true; } catch { return false; }
     };
-    const callPlausible = (name, options) => {
-      const plausible = Reflect.get(root, "plausible");
-      if (typeof plausible !== "function" || plausible !== vendorClient ||
-          Reflect.get(plausible, "l") !== true) return false;
-      Reflect.apply(plausible, root, options === undefined ? [name] : [name, options]);
-      return true;
+    const matchesConfiguredScript = () => {
+      try {
+        const script = vendorScript;
+        if ((typeof script !== "object" && typeof script !== "function") || script === null ||
+            Reflect.get(script, "ownerDocument") !== documentValue ||
+            Reflect.get(script, "id") !== scriptId || Reflect.get(script, "tagName") !== "SCRIPT" ||
+            Reflect.get(script, "src") !== config.scriptSrc || Reflect.get(script, "async") !== true ||
+            Reflect.get(script, "defer") !== false || Reflect.get(script, "noModule") !== false ||
+            Reflect.get(script, "type") !== "") return false;
+        const getAttribute = Reflect.get(script, "getAttribute");
+        const getAttributeNames = Reflect.get(script, "getAttributeNames");
+        const getElementById = Reflect.get(documentValue, "getElementById");
+        if (typeof getAttribute !== "function" || typeof getAttributeNames !== "function" ||
+            typeof getElementById !== "function" ||
+            Reflect.apply(getAttribute, script, ["data-cwl-astro-analytics"]) !== "plausible-v1") return false;
+        const connected = Reflect.get(script, "isConnected") === true;
+        const boundScript = Reflect.apply(getElementById, documentValue, [scriptId]);
+        if (connected ? boundScript !== script : boundScript !== null) return false;
+        const names = Reflect.apply(getAttributeNames, script, []);
+        if (!Array.isArray(names)) return false;
+        const dataNames = names.filter((name) => typeof name === "string" && name.startsWith("data-"));
+        return dataNames.length === 1 && dataNames[0] === "data-cwl-astro-analytics";
+      } catch { return false; }
+    };
+    const hasUsableVendor = () => {
+      try {
+        const plausible = Reflect.get(root, "plausible");
+        return vendorReady && matchesConfiguredScript() && plausible === vendorClient &&
+          typeof plausible === "function" && Reflect.get(plausible, "l") === true;
+      } catch { return false; }
+    };
+    const callPlausible = (name, options, referrer) => {
+      if (!hasUsableVendor()) return false;
+      const plausible = vendorClient;
+      requestReferrer = referrer;
+      try {
+        Reflect.apply(plausible, root, options === undefined ? [name] : [name, options]);
+        return true;
+      } finally {
+        requestReferrer = undefined;
+      }
     };
     const sendPageview = (pageview) => {
       try {
@@ -863,7 +1012,7 @@ export function createPlausibleBootstrapScript(
             pageview.completion === lastTrackedCompletion) {
           return pageview?.completion === lastTrackedCompletion;
         }
-        if (!callPlausible("pageview", { url: pageview.url })) return false;
+        if (!callPlausible("pageview", { url: pageview.url }, pageview.referrer)) return false;
         lastTrackedCompletion = pageview.completion;
         return true;
       } catch { return false; }
@@ -874,10 +1023,6 @@ export function createPlausibleBootstrapScript(
       const pending = pendingPageview;
       if (pending !== undefined && pending.url === href) {
         if (sendPageview(pending)) pendingPageview = undefined;
-      }
-      else if (pending === undefined && href === installHref) {
-        pendingPageview = Object.freeze({ completion: completionCounter, url: href });
-        if (sendPageview(pendingPageview)) pendingPageview = undefined;
       }
     };
     const run = (nextConfig) => {
@@ -899,9 +1044,13 @@ export function createPlausibleBootstrapScript(
         activeGeneration = generation;
         vendorReady = false;
         vendorClient = undefined;
-        completionCounter = 0;
-        pendingPageview = undefined;
-        lastTrackedCompletion = undefined;
+        pendingPageview = typeof completedNavigationUrl === "string"
+          ? Object.freeze({
+              completion: completionCounter,
+              referrer: completedNavigationReferrer,
+              url: completedNavigationUrl,
+            })
+          : undefined;
         lifecycleActive = true;
         lifecycle = Object.freeze({ get active() { return lifecycleActive; } });
         const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
@@ -911,13 +1060,7 @@ export function createPlausibleBootstrapScript(
           status() {
             if (activeGeneration !== generation || lifecycle.active !== true) return "adapter-not-loaded";
             if (consentPending) return "consent-pending";
-            try {
-              const plausible = Reflect.get(root, "plausible");
-              return vendorReady && plausible === vendorClient &&
-                typeof plausible === "function" && Reflect.get(plausible, "l") === true
-                ? "ready"
-                : "adapter-not-loaded";
-            } catch { return "adapter-not-loaded"; }
+            return hasUsableVendor() ? "ready" : "adapter-not-loaded";
           },
           track(name, properties) {
             try {
@@ -967,6 +1110,13 @@ export function createPlausibleBootstrapScript(
           lifecycleActive = false;
           return;
         }
+        let script;
+        script = Reflect.apply(createElement, documentValue, ["script"]);
+        vendorScript = script;
+        Reflect.set(script, "id", scriptId);
+        Reflect.set(script, "src", config.scriptSrc);
+        Reflect.set(script, "async", true);
+        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-cwl-astro-analytics", "plausible-v1"]);
         const queue = [];
         const stub = function(...args) { queue.push(args); };
         Reflect.defineProperty(stub, "q", { configurable: true, enumerable: true, value: queue, writable: true });
@@ -980,16 +1130,47 @@ export function createPlausibleBootstrapScript(
           autoCapturePageviews: false,
           captureOnLocalhost: config.captureOnLocalhost === true,
           ...(typeof config.endpoint === "string" ? { endpoint: config.endpoint } : {}),
+          transformRequest(payload) {
+            if ((typeof payload === "object" || typeof payload === "function") && payload !== null &&
+                typeof requestReferrer === "string") Reflect.set(payload, "r", requestReferrer);
+            return payload;
+          },
         };
         Reflect.apply(Reflect.get(stub, "init"), stub, [initOptions]);
+        let bindingValue = stub;
+        let capturedVendor;
+        const bindingGet = () => bindingValue;
+        const bindingSet = (value) => {
+          bindingValue = value;
+          try {
+            if (Reflect.get(documentValue, "currentScript") === script && matchesConfiguredScript()) {
+              capturedVendor = value;
+            }
+          } catch {}
+        };
         if (Reflect.defineProperty(root, "plausible", {
-          configurable: true, enumerable: true, value: stub, writable: true
-        }) !== true || Reflect.get(root, "plausible") !== stub) {
+          configurable: true, enumerable: true, get: bindingGet, set: bindingSet
+        }) !== true) {
           lifecycleActive = false;
           return;
         }
-        let ownedGlobal = stub;
-        let script;
+        const bindingDescriptor = Reflect.getOwnPropertyDescriptor(root, "plausible");
+        if (bindingDescriptor?.get !== bindingGet || bindingDescriptor?.set !== bindingSet ||
+            Reflect.get(root, "plausible") !== stub) {
+          lifecycleActive = false;
+          return;
+        }
+        const releaseBinding = (ownedValue) => {
+          try {
+            const descriptor = Reflect.getOwnPropertyDescriptor(root, "plausible");
+            if (descriptor?.get !== bindingGet || descriptor?.set !== bindingSet) return;
+            const currentValue = bindingGet();
+            if (currentValue === ownedValue) Reflect.deleteProperty(root, "plausible");
+            else Reflect.defineProperty(root, "plausible", {
+              configurable: true, enumerable: true, value: currentValue, writable: true
+            });
+          } catch {}
+        };
         const fail = () => {
           if (activeGeneration !== generation || !lifecycleActive) return;
           lifecycleActive = false;
@@ -1009,41 +1190,68 @@ export function createPlausibleBootstrapScript(
               if (typeof remove === "function") Reflect.apply(remove, script, []);
             }
           } catch {}
-          try {
-            if (Reflect.get(root, "plausible") === ownedGlobal) Reflect.deleteProperty(root, "plausible");
-          } catch {}
+          releaseBinding(capturedVendor === undefined ? stub : capturedVendor);
         };
         cleanup = fail;
-        script = Reflect.apply(createElement, documentValue, ["script"]);
-        Reflect.set(script, "id", scriptId);
-        Reflect.set(script, "src", config.scriptSrc);
-        Reflect.set(script, "async", true);
-        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-cwl-astro-analytics", "plausible-v1"]);
         pageLoadListener = config.pageviews === "none" ? undefined : () => {
           if (activeGeneration !== generation || lifecycle.active !== true) return;
           const href = readHref();
           if (typeof href !== "string") return;
-          const pageview = Object.freeze({ completion: ++completionCounter, url: href });
+          const referrer = navigationObservationGap
+            ? ""
+            : typeof completedNavigationUrl === "string"
+              ? completedNavigationUrl
+              : (() => {
+                  try {
+                    const value = Reflect.get(documentValue, "referrer");
+                    return typeof value === "string" ? value : "";
+                  } catch { return ""; }
+                })();
+          navigationObservationGap = false;
+          completedNavigationUrl = href;
+          completedNavigationReferrer = referrer;
+          const pageview = Object.freeze({ completion: ++completionCounter, referrer, url: href });
           pendingPageview = pageview;
           if (vendorReady && !isPrerendering() && sendPageview(pageview)) pendingPageview = undefined;
         };
         if (typeof pageLoadListener === "function") {
           const addEventListener = Reflect.get(documentValue, "addEventListener");
-          if (typeof addEventListener !== "function") { fail(); return; }
-          Reflect.apply(addEventListener, documentValue, ["astro:page-load", pageLoadListener]);
+          if (typeof addEventListener !== "function") { navigationObservationGap = true; fail(); return; }
+          try {
+            Reflect.apply(addEventListener, documentValue, ["astro:page-load", pageLoadListener]);
+          } catch { navigationObservationGap = true; fail(); return; }
+          const hasClientRouter = (() => {
+            try {
+              const querySelector = Reflect.get(documentValue, "querySelector");
+              return typeof querySelector === "function" &&
+                Reflect.apply(querySelector, documentValue, ['[name="astro-view-transitions-enabled"]']) !== null;
+            } catch { return true; }
+          })();
+          if (!hasClientRouter && !navigationObservationGap && typeof completedNavigationUrl !== "string") {
+            try {
+              const readyState = Reflect.get(documentValue, "readyState");
+              if (readyState === "interactive" || readyState === "complete") pageLoadListener();
+              else Reflect.apply(addEventListener, documentValue, ["DOMContentLoaded", pageLoadListener, { once: true }]);
+            } catch { navigationObservationGap = true; fail(); return; }
+          }
         }
         Reflect.apply(Reflect.get(script, "addEventListener"), script, ["load", () => {
           try {
             if (activeGeneration !== generation) return;
             const plausible = Reflect.get(root, "plausible");
-            if (plausible !== stub) ownedGlobal = plausible;
-            if (lifecycle.active !== true || typeof plausible !== "function" ||
-                plausible === stub || Reflect.get(plausible, "l") !== true) {
+            if (lifecycle.active !== true || !matchesConfiguredScript() || plausible !== capturedVendor ||
+                typeof plausible !== "function" || plausible === stub || Reflect.get(plausible, "l") !== true) {
               fail();
               return;
             }
             vendorClient = plausible;
             vendorReady = true;
+            const descriptor = Reflect.getOwnPropertyDescriptor(root, "plausible");
+            if (descriptor?.get === bindingGet && descriptor?.set === bindingSet) {
+              Reflect.defineProperty(root, "plausible", {
+                configurable: true, enumerable: true, value: plausible, writable: true
+              });
+            }
             if (config.pageviews !== "none") {
               if (isPrerendering()) {
                 const addEventListener = Reflect.get(documentValue, "addEventListener");
@@ -1122,19 +1330,17 @@ export function createGoogleAnalyticsBootstrapScript(
     let generationCounter = 0;
     let handler;
     let vendorReady = false;
+    let vendorScript;
     let ownedGtag;
     let ownedDataLayer;
     let pageLoadListener;
     let completionCounter = 0;
+    let completedNavigationReferrer;
+    let completedNavigationTitle;
+    let completedNavigationUrl;
     let lastTrackedCompletion;
     let pendingPageview;
-    let lastTrackedNavigationUrl;
-    const installHref = (() => {
-      try {
-        const href = Reflect.get(Reflect.get(root, "location"), "href");
-        return typeof href === "string" ? href : undefined;
-      } catch { return undefined; }
-    })();
+    let navigationObservationGap = false;
     const sameRecord = (left, right) => {
       try {
         if (left === undefined || right === undefined) return left === right;
@@ -1176,11 +1382,36 @@ export function createGoogleAnalyticsBootstrapScript(
         return !["firebase_", "ga_", "google_"].some((prefix) => normalized.startsWith(prefix));
       } catch { return false; }
     };
+    const matchesConfiguredScript = () => {
+      try {
+        const script = vendorScript;
+        if ((typeof script !== "object" && typeof script !== "function") || script === null ||
+            Reflect.get(script, "ownerDocument") !== documentValue || Reflect.get(script, "id") !== scriptId ||
+            Reflect.get(script, "tagName") !== "SCRIPT" || Reflect.get(script, "src") !== config.scriptSrc ||
+            Reflect.get(script, "async") !== true || Reflect.get(script, "defer") !== false ||
+            Reflect.get(script, "noModule") !== false || Reflect.get(script, "type") !== "") return false;
+        const getAttribute = Reflect.get(script, "getAttribute");
+        const getAttributeNames = Reflect.get(script, "getAttributeNames");
+        const getElementById = Reflect.get(documentValue, "getElementById");
+        if (typeof getAttribute !== "function" || typeof getAttributeNames !== "function" ||
+            typeof getElementById !== "function" ||
+            Reflect.apply(getAttribute, script, ["data-cwl-astro-analytics"]) !== "google-analytics-v1" ||
+            Reflect.apply(getAttribute, script, ["data-measurement-id"]) !== config.measurementId) return false;
+        const connected = Reflect.get(script, "isConnected") === true;
+        const boundScript = Reflect.apply(getElementById, documentValue, [scriptId]);
+        if (connected ? boundScript !== script : boundScript !== null) return false;
+        const names = Reflect.apply(getAttributeNames, script, []);
+        if (!Array.isArray(names)) return false;
+        const dataNames = names.filter((name) => typeof name === "string" && name.startsWith("data-"));
+        return dataNames.length === 2 && dataNames.includes("data-cwl-astro-analytics") &&
+          dataNames.includes("data-measurement-id");
+      } catch { return false; }
+    };
     const callGtag = (...args) => {
       try {
         const gtag = Reflect.get(root, "gtag");
         const dataLayer = Reflect.get(root, "dataLayer");
-        if (!vendorReady || gtag !== ownedGtag || dataLayer !== ownedDataLayer ||
+        if (!vendorReady || !matchesConfiguredScript() || gtag !== ownedGtag || dataLayer !== ownedDataLayer ||
             typeof gtag !== "function" || !Array.isArray(dataLayer)) return false;
         Reflect.apply(gtag, root, args);
         return true;
@@ -1196,19 +1427,11 @@ export function createGoogleAnalyticsBootstrapScript(
       Reflect.defineProperty(parameters, "page_location", {
         configurable: false, enumerable: true, value: href, writable: false,
       });
-      try {
-        const title = Reflect.get(documentValue, "title");
-        if (typeof title === "string") Reflect.defineProperty(parameters, "page_title", {
-          configurable: false, enumerable: true, value: title, writable: false,
-        });
-      } catch {}
-      let referrer = lastTrackedNavigationUrl;
-      if (referrer === undefined) {
-        try {
-          const documentReferrer = Reflect.get(documentValue, "referrer");
-          if (typeof documentReferrer === "string" && documentReferrer !== "") referrer = documentReferrer;
-        } catch {}
-      }
+      const title = pageview.title;
+      if (typeof title === "string") Reflect.defineProperty(parameters, "page_title", {
+        configurable: false, enumerable: true, value: title, writable: false,
+      });
+      const referrer = pageview.referrer;
       if (typeof referrer === "string") Reflect.defineProperty(parameters, "page_referrer", {
         configurable: false, enumerable: true, value: referrer, writable: false,
       });
@@ -1217,21 +1440,17 @@ export function createGoogleAnalyticsBootstrapScript(
       });
       if (callGtag("event", "page_view", parameters)) {
         lastTrackedCompletion = pageview.completion;
-        lastTrackedNavigationUrl = href;
         return true;
       }
       return false;
     };
     const flushPageview = (generation) => {
-      if (!active || activeGeneration !== generation || isPrerendering()) return;
+      if (config.pageviews === "none" || navigationObservationGap ||
+          !active || activeGeneration !== generation || isPrerendering()) return;
       const href = readHref();
       const pending = pendingPageview;
       if (pending !== undefined && pending.url === href) {
         if (sendPageview(pending, generation)) pendingPageview = undefined;
-      }
-      else if (pending === undefined && href === installHref) {
-        pendingPageview = Object.freeze({ completion: completionCounter, url: href });
-        if (sendPageview(pendingPageview, generation)) pendingPageview = undefined;
       }
     };
     const registerHandler = () => {
@@ -1259,17 +1478,21 @@ export function createGoogleAnalyticsBootstrapScript(
       const generation = ++generationCounter;
       activeGeneration = generation;
       vendorReady = false;
-      completionCounter = 0;
-      pendingPageview = undefined;
-      lastTrackedCompletion = undefined;
-      lastTrackedNavigationUrl = undefined;
+      pendingPageview = typeof completedNavigationUrl === "string"
+        ? Object.freeze({
+            completion: completionCounter,
+            referrer: completedNavigationReferrer,
+            title: completedNavigationTitle,
+            url: completedNavigationUrl,
+          })
+        : undefined;
       const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
       handler = Object.freeze({
         __astroAnalyticsBrand: brand,
         __astroAnalyticsProvider: "google-analytics",
         status() {
           if (consentPending) return "consent-pending";
-          return activeGeneration === generation && active && vendorReady && Reflect.get(root, "gtag") === ownedGtag &&
+          return activeGeneration === generation && active && vendorReady && matchesConfiguredScript() && Reflect.get(root, "gtag") === ownedGtag &&
             Reflect.get(root, "dataLayer") === ownedDataLayer ? "ready" : "adapter-not-loaded";
         },
         track(name, properties) {
@@ -1400,29 +1623,68 @@ export function createGoogleAnalyticsBootstrapScript(
 
         const script = Reflect.apply(createElement, documentValue, ["script"]);
         localScript = script;
+        vendorScript = script;
         Reflect.set(script, "id", scriptId);
         Reflect.set(script, "src", config.scriptSrc);
         Reflect.set(script, "async", true);
         Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-cwl-astro-analytics", "google-analytics-v1"]);
         Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-measurement-id", config.measurementId]);
         localPageLoadListener = config.pageviews === "none" ? undefined : () => {
-          if (!active || activeGeneration !== generation) return;
+          if (activeGeneration !== generation) return;
           const href = readHref();
           if (typeof href !== "string") return;
-          const pageview = Object.freeze({ completion: ++completionCounter, url: href });
+          const referrer = navigationObservationGap
+            ? ""
+            : typeof completedNavigationUrl === "string"
+              ? completedNavigationUrl
+              : (() => {
+                  try {
+                    const value = Reflect.get(documentValue, "referrer");
+                    return typeof value === "string" ? value : "";
+                  } catch { return ""; }
+                })();
+          navigationObservationGap = false;
+          completedNavigationReferrer = referrer;
+          completedNavigationUrl = href;
+          try {
+            const value = Reflect.get(documentValue, "title");
+            completedNavigationTitle = typeof value === "string" ? value : undefined;
+          } catch { completedNavigationTitle = undefined; }
+          const pageview = Object.freeze({
+            completion: ++completionCounter,
+            referrer,
+            title: completedNavigationTitle,
+            url: href,
+          });
           pendingPageview = pageview;
-          if (vendorReady && !isPrerendering() && sendPageview(pageview, generation)) pendingPageview = undefined;
+          if (active && vendorReady && !isPrerendering() && sendPageview(pageview, generation)) pendingPageview = undefined;
         };
         pageLoadListener = localPageLoadListener;
         if (typeof localPageLoadListener === "function") {
           const addEventListener = Reflect.get(documentValue, "addEventListener");
-          if (typeof addEventListener !== "function") { cleanup(); return; }
-          Reflect.apply(addEventListener, documentValue, ["astro:page-load", localPageLoadListener]);
+          if (typeof addEventListener !== "function") { navigationObservationGap = true; cleanup(); return; }
+          try {
+            Reflect.apply(addEventListener, documentValue, ["astro:page-load", localPageLoadListener]);
+          } catch { navigationObservationGap = true; cleanup(); return; }
+          const hasClientRouter = (() => {
+            try {
+              const querySelector = Reflect.get(documentValue, "querySelector");
+              return typeof querySelector === "function" &&
+                Reflect.apply(querySelector, documentValue, ['[name="astro-view-transitions-enabled"]']) !== null;
+            } catch { return true; }
+          })();
+          if (!hasClientRouter && !navigationObservationGap && typeof completedNavigationUrl !== "string") {
+            try {
+              const readyState = Reflect.get(documentValue, "readyState");
+              if (readyState === "interactive" || readyState === "complete") localPageLoadListener();
+              else Reflect.apply(addEventListener, documentValue, ["DOMContentLoaded", localPageLoadListener, { once: true }]);
+            } catch { navigationObservationGap = true; cleanup(); return; }
+          }
         }
         active = true;
         Reflect.apply(Reflect.get(script, "addEventListener"), script, ["load", () => {
           try {
-            if (!active || activeGeneration !== generation || Reflect.get(root, "gtag") !== localGtag ||
+            if (!active || activeGeneration !== generation || !matchesConfiguredScript() || Reflect.get(root, "gtag") !== localGtag ||
                 Reflect.get(root, "dataLayer") !== localDataLayer) {
               cleanup();
               return;
@@ -1500,8 +1762,10 @@ export function createMatomoBootstrapScript(
     let ownedQueue;
     let vendorLoadProven = false;
     let vendorReady = false;
+    let vendorScript;
     let navigationObservationGap = false;
     let navigationObserverInstalled = false;
+    let initialDocumentScheduled = false;
     let completedNavigationCompletion = 0;
     let lastTrackedCompletion;
     let lastTrackedNavigationUrl;
@@ -1509,27 +1773,9 @@ export function createMatomoBootstrapScript(
     let pendingPageviewUrl;
     let pendingPageviewReferrer;
     let pendingPageviewCompletion;
-    const installHref = (() => {
-      try {
-        const href = Reflect.get(Reflect.get(root, "location"), "href");
-        return typeof href === "string" ? href : undefined;
-      } catch { return undefined; }
-    })();
-    const installTitle = (() => {
-      try {
-        const title = Reflect.get(documentValue, "title");
-        return typeof title === "string" ? title : undefined;
-      } catch { return undefined; }
-    })();
-    const installReferrer = (() => {
-      try {
-        const referrer = Reflect.get(documentValue, "referrer");
-        return typeof referrer === "string" && referrer !== "" ? referrer : undefined;
-      } catch { return undefined; }
-    })();
-    let completedNavigationUrl = installHref;
-    let completedNavigationTitle = installTitle;
-    let completedNavigationReferrer = installReferrer;
+    let completedNavigationUrl;
+    let completedNavigationTitle;
+    let completedNavigationReferrer;
     const sameConfig = (value) => {
       try {
         return (typeof value === "object" || typeof value === "function") && value !== null &&
@@ -1558,6 +1804,13 @@ export function createMatomoBootstrapScript(
     const isPrerendering = () => {
       try { return Reflect.get(documentValue, "prerendering") === true; } catch { return false; }
     };
+    const hasClientRouter = () => {
+      try {
+        const querySelector = Reflect.get(documentValue, "querySelector");
+        return typeof querySelector === "function" &&
+          Reflect.apply(querySelector, documentValue, ['[name="astro-view-transitions-enabled"]']) !== null;
+      } catch { return true; }
+    };
     const ensureNavigationObserver = () => {
       if (navigationObserverInstalled) return true;
       try {
@@ -1574,9 +1827,35 @@ export function createMatomoBootstrapScript(
         return false;
       }
     };
+    const matchesConfiguredScript = () => {
+      try {
+        const script = vendorScript;
+        if ((typeof script !== "object" && typeof script !== "function") || script === null ||
+            Reflect.get(script, "ownerDocument") !== documentValue || Reflect.get(script, "id") !== scriptId ||
+            Reflect.get(script, "tagName") !== "SCRIPT" || Reflect.get(script, "src") !== config.scriptSrc ||
+            Reflect.get(script, "async") !== true || Reflect.get(script, "defer") !== false ||
+            Reflect.get(script, "noModule") !== false || Reflect.get(script, "type") !== "") return false;
+        const getAttribute = Reflect.get(script, "getAttribute");
+        const getAttributeNames = Reflect.get(script, "getAttributeNames");
+        const getElementById = Reflect.get(documentValue, "getElementById");
+        if (typeof getAttribute !== "function" || typeof getAttributeNames !== "function" ||
+            typeof getElementById !== "function" ||
+            Reflect.apply(getAttribute, script, ["data-cwl-astro-analytics"]) !== "matomo-v1" ||
+            Reflect.apply(getAttribute, script, ["data-site-id"]) !== config.siteId ||
+            Reflect.apply(getAttribute, script, ["data-tracker-url"]) !== config.trackerUrl) return false;
+        const connected = Reflect.get(script, "isConnected") === true;
+        const boundScript = Reflect.apply(getElementById, documentValue, [scriptId]);
+        if (connected ? boundScript !== script : boundScript !== null) return false;
+        const names = Reflect.apply(getAttributeNames, script, []);
+        if (!Array.isArray(names)) return false;
+        const dataNames = names.filter((name) => typeof name === "string" && name.startsWith("data-"));
+        return dataNames.length === 3 && dataNames.includes("data-cwl-astro-analytics") &&
+          dataNames.includes("data-site-id") && dataNames.includes("data-tracker-url");
+      } catch { return false; }
+    };
     const matchesOwnedVendor = () => {
       try {
-        if (!vendorLoadProven) return false;
+        if (!vendorLoadProven || !matchesConfiguredScript()) return false;
         const queue = Reflect.get(root, "_paq");
         const matomo = Reflect.get(root, "Matomo");
         if (queue !== ownedQueue || matomo !== ownedMatomo ||
@@ -1640,7 +1919,8 @@ export function createMatomoBootstrapScript(
       return false;
     };
     const flushCompletedNavigation = (generation) => {
-      if (!active || activeGeneration !== generation || isPrerendering()) return;
+      if (config.pageviews === "none" || navigationObservationGap ||
+          !active || activeGeneration !== generation || isPrerendering()) return;
       const href = readHref();
       if (typeof completedNavigationUrl !== "string" || href !== completedNavigationUrl) return;
       const pending = pendingPageviewUrl;
@@ -1698,6 +1978,21 @@ export function createMatomoBootstrapScript(
         registerHandler();
         return;
       }
+      if (!hasClientRouter() && !navigationObservationGap && typeof completedNavigationUrl !== "string" && !initialDocumentScheduled) {
+        initialDocumentScheduled = true;
+        try {
+          const readyState = Reflect.get(documentValue, "readyState");
+          if (readyState === "interactive" || readyState === "complete") recordCompletedNavigation();
+          else {
+            const addEventListener = Reflect.get(documentValue, "addEventListener");
+            Reflect.apply(addEventListener, documentValue, ["DOMContentLoaded", recordCompletedNavigation, { once: true }]);
+          }
+        } catch {
+          navigationObservationGap = true;
+          registerHandler();
+          return;
+        }
+      }
       if (navigationObservationGap) {
         registerHandler();
         return;
@@ -1721,8 +2016,6 @@ export function createMatomoBootstrapScript(
       pendingPageviewUrl = completedNavigationUrl;
       pendingPageviewReferrer = completedNavigationReferrer;
       pendingPageviewCompletion = completedNavigationCompletion;
-      lastTrackedCompletion = undefined;
-      lastTrackedNavigationUrl = undefined;
       const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
       handler = Object.freeze({
         __astroAnalyticsBrand: brand,
@@ -1858,6 +2151,7 @@ export function createMatomoBootstrapScript(
         }
         const script = Reflect.apply(createElement, documentValue, ["script"]);
         localScript = script;
+        vendorScript = script;
         Reflect.set(script, "id", scriptId);
         Reflect.set(script, "src", config.scriptSrc);
         Reflect.set(script, "async", true);
@@ -1874,7 +2168,7 @@ export function createMatomoBootstrapScript(
             const queueKeys = (typeof queueProxy === "object" || typeof queueProxy === "function") && queueProxy !== null
               ? Reflect.ownKeys(queueProxy)
               : [];
-            if (!active || activeGeneration !== generation || queueProxy === localQueue ||
+            if (!active || activeGeneration !== generation || !matchesConfiguredScript() || queueProxy === localQueue ||
                 queueKeys.length !== 1 || queueKeys[0] !== "push" || typeof Reflect.get(queueProxy, "push") !== "function" ||
                 (typeof matomo !== "object" && typeof matomo !== "function") || matomo === null ||
                 piwik !== matomo || trackerAlias !== matomo || Reflect.get(matomo, "initialized") !== true ||

@@ -46,10 +46,13 @@ function executeBootstrap(context: vm.Context): void {
   vm.runInNewContext(createBootstrapScript(), context, { timeout: 1_000 });
 }
 
+const simulatedFathomVendorKey = Symbol("simulated-fathom-vendor");
+
 function executeFathomBootstrap(
   context: vm.Context,
   overrides: Partial<Parameters<typeof createFathomBootstrapScript>[0]> = {},
 ): void {
+  try { if (context.document && context.document.readyState === undefined) Reflect.set(context.document, "readyState", "complete"); } catch {}
   const options = {
     events: true,
     pageviews: "provider" as const,
@@ -69,17 +72,41 @@ function executeFathomBootstrap(
       { timeout: 1_000 },
     );
   }
+  const documentValue = context.document as Record<PropertyKey, unknown> | undefined;
+  const coordinatorPresent = documentValue !== undefined && Reflect.ownKeys(documentValue).some((key) =>
+    typeof key === "symbol" && Symbol.keyFor(key) === "codeworkslabs.astro-analytics:fathom-coordinator:v1");
+  const initialDescriptor = Reflect.getOwnPropertyDescriptor(context, "fathom");
+  const initialVendor = !coordinatorPresent && initialDescriptor !== undefined && "value" in initialDescriptor
+    ? initialDescriptor.value
+    : undefined;
+  if (initialVendor !== undefined) {
+    Reflect.set(context, simulatedFathomVendorKey, initialVendor);
+    Reflect.deleteProperty(context, "fathom");
+  }
+  const simulatedVendor = Reflect.get(context, simulatedFathomVendorKey);
   vm.runInNewContext(
     createFathomBootstrapScript(options),
     context,
     { timeout: 1_000 },
   );
+  if (simulatedVendor !== undefined && documentValue !== undefined) {
+    const getElementById = documentValue.getElementById;
+    const script = typeof getElementById === "function"
+      ? Reflect.apply(getElementById, documentValue, [FATHOM_SCRIPT_ID]) as Record<string, unknown> | null
+      : null;
+    if (script !== null) {
+      documentValue.currentScript = script;
+      context.fathom = simulatedVendor;
+      documentValue.currentScript = undefined;
+    }
+  }
 }
 
 function executePlausibleBootstrap(
   context: vm.Context,
   overrides: Partial<Parameters<typeof createPlausibleBootstrapScript>[0]> = {},
 ): void {
+  try { if (context.document && context.document.readyState === undefined) Reflect.set(context.document, "readyState", "complete"); } catch {}
   const options = {
     events: true,
     pageviews: "provider" as const,
@@ -109,6 +136,7 @@ function executeGoogleAnalyticsBootstrap(
   context: vm.Context,
   overrides: Partial<Parameters<typeof createGoogleAnalyticsBootstrapScript>[0]> = {},
 ): void {
+  try { if (context.document && context.document.readyState === undefined) Reflect.set(context.document, "readyState", "complete"); } catch {}
   const options = {
     consentInitial: {
       analyticsStorage: "granted" as const,
@@ -146,6 +174,7 @@ function executeMatomoBootstrap(
   context: vm.Context,
   overrides: Partial<Parameters<typeof createMatomoBootstrapScript>[0]> = {},
 ): void {
+  try { if (context.document && context.document.readyState === undefined) Reflect.set(context.document, "readyState", "complete"); } catch {}
   const options = {
     eventCategory: "Astro",
     events: true,
@@ -207,9 +236,22 @@ function activatePlausible(
 ): unknown[][] {
   const plausible = (...args: unknown[]) => { calls.push(args); };
   Object.defineProperty(plausible, "l", { value: true });
+  (context.document as Record<string, unknown>).currentScript = script;
   context.plausible = plausible;
+  (context.document as Record<string, unknown>).currentScript = undefined;
   (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
   return calls;
+}
+
+function activateFathom(
+  context: vm.Context,
+  script: Record<string, unknown>,
+  fathom: Record<string, unknown>,
+): void {
+  (context.document as Record<string, unknown>).currentScript = script;
+  context.fathom = fathom;
+  (context.document as Record<string, unknown>).currentScript = undefined;
+  (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
 }
 
 function activateMatomo(
@@ -1979,6 +2021,7 @@ test("Google Analytics fails closed without a page-load observer and recovers on
   assert.deepEqual(serializeGtagCommand(dataLayer.at(-1)!), [
     "event", "page_view", {
       page_location: "https://example.test/observed/",
+      page_referrer: "",
       page_title: "Observed",
       send_to: "G-TEST123",
     },
@@ -2027,7 +2070,9 @@ test("Plausible retains a synchronously rejected pageview for matching reentry",
     calls.push(args);
   };
   Object.defineProperty(plausible, "l", { value: true });
+  context.document.currentScript = script;
   context.plausible = plausible;
+  context.document.currentScript = undefined;
   (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
   assert.equal(attempts, 1);
   executePlausibleBootstrap(context);
@@ -2054,6 +2099,7 @@ test("Google Analytics retains a synchronously rejected pageview for matching re
   assert.deepEqual(serializeGtagCommand((dataLayer as Array<ArrayLike<unknown>>).at(-1)!), [
     "event", "page_view", {
       page_location: "https://example.test/",
+      page_referrer: "",
       send_to: "G-TEST123",
     },
   ]);
@@ -2112,12 +2158,12 @@ test("multi-provider runtime exposes independent adapter outcomes", () => {
 
   const harness = createDocumentHarness();
   const calls: string[] = [];
+  const fathom = {
+    trackEvent(name: string) { calls.push(name); },
+    trackPageview() {},
+  };
   const context: vm.Context = {
     document: harness.document,
-    fathom: {
-      trackEvent(name: string) { calls.push(name); },
-      trackPageview() {},
-    },
     location: { href: "https://example.test/analytics/" },
   };
   vm.runInNewContext(injected[0]?.slice("page:".length) ?? "", context);
@@ -2144,6 +2190,9 @@ test("multi-provider runtime exposes independent adapter outcomes", () => {
   assert.deepEqual(calls, []);
 
   const script = harness.appended[0] ?? {};
+  context.document.currentScript = script;
+  context.fathom = fathom;
+  context.document.currentScript = undefined;
   (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
   assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
     fathom: "ready",
@@ -2369,9 +2418,10 @@ test("Plausible retries after a nonconforming script replacement without deletin
   const nonconformingReplacement = {};
   context.plausible = nonconformingReplacement;
   (failedScript.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
-  assert.equal(context.plausible, undefined);
+  assert.equal(context.plausible, nonconformingReplacement);
   assert.equal(failedScript.isConnected, false);
 
+  vm.runInNewContext("delete globalThis.plausible", context);
   executePlausibleBootstrap(context);
   assert.equal(harness.appended.length, 2);
   const retryScript = harness.appended[1] ?? {};
@@ -2851,12 +2901,14 @@ test("Fathom runtime installs the official embed and connects track", () => {
     "adapter-not-loaded",
   );
 
+  context.document.currentScript = script;
   context.fathom = {
     trackEvent(...args: unknown[]) {
       calls.push(args);
     },
     trackPageview() {},
   };
+  context.document.currentScript = undefined;
   assert.equal(context.astroAnalytics.track("preexisting-api").reason, "adapter-not-loaded");
   (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
   assert.equal(context.astroAnalytics.track("").reason, "invalid-event");
@@ -3041,8 +3093,9 @@ test("Fathom pageviews still load when optional client installation fails", () =
   const harness = createDocumentHarness();
   const target = { document: harness.document, Symbol };
   const substitutedRoot = new Proxy(target, {
-    getOwnPropertyDescriptor() {
-      throw new Error("hostile client descriptor");
+    getOwnPropertyDescriptor(innerTarget, property) {
+      if (property === "astroAnalytics") throw new Error("hostile client descriptor");
+      return Reflect.getOwnPropertyDescriptor(innerTarget, property);
     },
   });
   const context: vm.Context = { globalThis: substitutedRoot };
@@ -3099,7 +3152,7 @@ test("an inert matching script cannot suppress Fathom initialization", () => {
   assert.equal(harness.appended[0]?.id, `${FATHOM_SCRIPT_ID}-owned`);
 });
 
-test("Fathom reentry supersedes an externally disconnected script", () => {
+test("Fathom reentry reuses a proven detached script without duplicating its pageview", () => {
   const harness = createDocumentHarness();
   const calls: string[] = [];
   const context: vm.Context = {
@@ -3116,15 +3169,12 @@ test("Fathom reentry supersedes an externally disconnected script", () => {
 
   (first.remove as () => void)();
   executeFathomBootstrap(context, { pageviews: "astro" });
-  const second = harness.appended[1] ?? {};
-  const secondLoad = (second.listeners as Map<string, Array<() => void>>).get("load")?.[0];
-  secondLoad?.();
+  assert.equal(harness.appended.length, 1);
   context.location.href = "https://example.test/next";
   for (const listener of harness.documentListeners.get("astro:page-load") ?? []) listener();
 
-  assert.equal(harness.documentListeners.get("astro:page-load")?.length, 2);
+  assert.equal(harness.documentListeners.get("astro:page-load")?.length, 1);
   assert.deepEqual(calls, [
-    "https://example.test/",
     "https://example.test/",
     "https://example.test/next",
   ]);
@@ -3213,10 +3263,9 @@ test("a loaded script without the Fathom pageview API fails and can retry", () =
 
   assert.equal(first.isConnected, false);
   assert.equal(harness.documentListeners.get("astro:page-load")?.length ?? 0, 0);
-  context.fathom = { trackPageview() { calls.push(context.location.href); } };
   executeFathomBootstrap(context);
   const second = harness.appended[1] ?? {};
-  (second.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+  activateFathom(context, second, { trackPageview() { calls.push(context.location.href); } });
   assert.deepEqual(calls, ["https://example.test/"]);
 });
 
@@ -3304,7 +3353,7 @@ test("multiple page-loads before Fathom readiness coalesce to the current page",
   (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0]?.length, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), [{ referrer: "https://example.test/one" }]);
 });
 
 test("stalled vendor readiness retains only one current navigation", () => {
@@ -3325,7 +3374,7 @@ test("stalled vendor readiness retains only one current navigation", () => {
   (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0]?.length, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), [{ referrer: "https://example.test/page-103" }]);
 });
 
 test("pre-ready navigation uses only the current canonical and query context", () => {
@@ -3354,7 +3403,7 @@ test("pre-ready navigation uses only the current canonical and query context", (
   (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0]?.args.length, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0]?.args)), [{ referrer: "https://example.test/one?ref=two" }]);
   assert.equal(calls[0]?.canonical, "https://example.test/two");
 });
 
@@ -3381,7 +3430,7 @@ test("ready completed navigations are not URL-deduplicated and pre-ready routes 
     for (const listener of harness.documentListeners.get("astro:page-load") ?? []) listener();
     if (!readyBeforeNavigation) load?.();
 
-    assert.equal(calls.length, readyBeforeNavigation ? 4 : 1);
+    assert.equal(calls.length, readyBeforeNavigation ? 3 : 1);
   }
 });
 
@@ -3407,7 +3456,7 @@ test("canonical false coalesces to the current browser navigation", () => {
   (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0]?.args.length, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0]?.args)), [{ referrer: "https://example.test/one?variant=a" }]);
   assert.equal(calls[0]?.href, "https://example.test/two?variant=b");
 });
 
@@ -3463,7 +3512,7 @@ test("forged document state cannot suppress loading or substitute callbacks", ()
   }
 });
 
-test("forged state tied to a matching connected script cannot claim package ownership", () => {
+test("forged state tied to a matching connected script is preserved but cannot claim package ownership", () => {
   const attributes: Record<string, string> = {
     "data-auto": "false",
     "data-cwl-astro-analytics": "fathom-v1",
@@ -3500,8 +3549,9 @@ test("forged state tied to a matching connected script cannot claim package owne
 
   executeFathomBootstrap({ document: harness.document });
 
-  assert.equal(lookalike.isConnected, false);
+  assert.equal(lookalike.isConnected, true);
   assert.equal(harness.appended.length, 1);
+  assert.equal(harness.appended[0]?.id, `${FATHOM_SCRIPT_ID}-owned`);
 });
 
 test("copied document state is replaced by the immutable script-bound generation", () => {
@@ -3793,4 +3843,219 @@ test("a self-referential proxy that rejects installation preserves the client", 
   assert.doesNotThrow(() => executeBootstrap(context));
   assert.equal(target.astroAnalytics, existingClient);
   assert.equal(target.__astroAnalyticsRuntime, "old-marker");
+});
+
+test("pageview none remains event-only across matching runtime reentry", () => {
+  {
+    const harness = createDocumentHarness();
+    const pageviews: unknown[][] = [];
+    const context: vm.Context = {
+      document: harness.document,
+      fathom: { trackEvent() {}, trackPageview(...args: unknown[]) { pageviews.push(args); } },
+      location: { href: "https://example.test/" },
+    };
+    executeFathomBootstrap(context, { pageviews: "none" });
+    (harness.appended[0]?.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+    executeFathomBootstrap(context, { pageviews: "none" });
+    assert.deepEqual(pageviews, []);
+    assert.equal(context.astroAnalytics.track("event-only").ok, true);
+  }
+  {
+    const harness = createDocumentHarness();
+    const context: vm.Context = { document: harness.document, location: { href: "https://example.test/" } };
+    executePlausibleBootstrap(context, { pageviews: "none" });
+    const calls = activatePlausible(context, harness.appended[0] ?? {});
+    executePlausibleBootstrap(context, { pageviews: "none" });
+    assert.deepEqual(calls, []);
+    assert.equal(context.astroAnalytics.track("event-only").ok, true);
+  }
+  {
+    const harness = createDocumentHarness();
+    const context: vm.Context = { document: harness.document, location: { href: "https://example.test/" } };
+    executeGoogleAnalyticsBootstrap(context, { pageviews: "none" });
+    (harness.appended[0]?.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+    executeGoogleAnalyticsBootstrap(context, { pageviews: "none" });
+    const commands = (context.dataLayer as Array<ArrayLike<unknown>>).map(serializeGtagCommand);
+    assert.equal(commands.some((command) => command[0] === "event" && command[1] === "page_view"), false);
+    assert.equal(context.astroAnalytics.track("event_only").ok, true);
+  }
+});
+
+test("ClientRouter startup waits for its first completed route across every provider", () => {
+  const markClientRouter = (document: Record<string, unknown>) => {
+    document.querySelector = (selector: string) => selector.includes("astro-view-transitions-enabled") ? {} : null;
+  };
+  {
+    const harness = createDocumentHarness();
+    markClientRouter(harness.document);
+    const calls: unknown[][] = [];
+    const context: vm.Context = {
+      document: harness.document,
+      fathom: { trackEvent() {}, trackPageview(...args: unknown[]) { calls.push(args); } },
+      location: { href: "https://example.test/start" },
+    };
+    executeFathomBootstrap(context);
+    (harness.appended[0]?.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+    assert.deepEqual(calls, []);
+    context.location.href = "https://example.test/ready";
+    harness.documentListeners.get("astro:page-load")?.[0]?.();
+    assert.equal(calls.length, 1);
+  }
+  {
+    const harness = createDocumentHarness();
+    markClientRouter(harness.document);
+    const context: vm.Context = { document: harness.document, location: { href: "https://example.test/start" } };
+    executePlausibleBootstrap(context);
+    const calls = activatePlausible(context, harness.appended[0] ?? {});
+    assert.deepEqual(calls, []);
+    context.location.href = "https://example.test/ready";
+    harness.documentListeners.get("astro:page-load")?.[0]?.();
+    assert.equal(calls.length, 1);
+  }
+  {
+    const harness = createDocumentHarness();
+    markClientRouter(harness.document);
+    const context: vm.Context = { document: harness.document, location: { href: "https://example.test/start" } };
+    executeGoogleAnalyticsBootstrap(context);
+    (harness.appended[0]?.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+    const commands = context.dataLayer as Array<ArrayLike<unknown>>;
+    assert.equal(commands.map(serializeGtagCommand).some((command) => command[1] === "page_view"), false);
+    context.location.href = "https://example.test/ready";
+    harness.documentListeners.get("astro:page-load")?.[0]?.();
+    assert.equal(commands.map(serializeGtagCommand).filter((command) => command[1] === "page_view").length, 1);
+  }
+  {
+    const harness = createDocumentHarness();
+    markClientRouter(harness.document);
+    const context: vm.Context = { document: harness.document, location: { href: "https://example.test/start" } };
+    executeMatomoBootstrap(context);
+    const commands = activateMatomo(context, harness.appended[0] ?? {});
+    assert.equal(commands.some((command) => command[0] === "trackPageView"), false);
+    context.location.href = "https://example.test/ready";
+    harness.documentListeners.get("astro:page-load")?.[0]?.();
+    assert.equal(commands.filter((command) => command[0] === "trackPageView").length, 1);
+  }
+});
+
+test("Fathom and Plausible preserve the preceding completed route as virtual referrer", () => {
+  {
+    const harness = createDocumentHarness();
+    harness.document.referrer = "https://search.example/";
+    const calls: unknown[][] = [];
+    const context: vm.Context = {
+      document: harness.document,
+      fathom: { trackEvent() {}, trackPageview(...args: unknown[]) { calls.push(args); } },
+      location: { href: "https://example.test/first" },
+    };
+    executeFathomBootstrap(context);
+    (harness.appended[0]?.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+    context.location.href = "https://example.test/second";
+    harness.documentListeners.get("astro:page-load")?.[0]?.();
+    assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+      [{ referrer: "https://search.example/" }],
+      [{ referrer: "https://example.test/first" }],
+    ]);
+  }
+  {
+    const harness = createDocumentHarness();
+    harness.document.referrer = "https://search.example/";
+    const payloads: Array<Record<string, unknown>> = [];
+    const context: vm.Context = { document: harness.document, location: { href: "https://example.test/first" } };
+    executePlausibleBootstrap(context);
+    const script = harness.appended[0] ?? {};
+    const stub = context.plausible as { o: { transformRequest(payload: Record<string, unknown>): Record<string, unknown> } };
+    const plausible = () => { payloads.push(stub.o.transformRequest({ r: "document-default" })); };
+    Object.defineProperty(plausible, "l", { value: true });
+    context.document.currentScript = script;
+    context.plausible = plausible;
+    context.document.currentScript = undefined;
+    (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+    context.location.href = "https://example.test/second";
+    harness.documentListeners.get("astro:page-load")?.[0]?.();
+    assert.deepEqual(JSON.parse(JSON.stringify(payloads)), [
+      { r: "https://search.example/" },
+      { r: "https://example.test/first" },
+    ]);
+  }
+});
+
+test("GA4 pre-ready coalescing retains the completed-route title and immediate virtual referrer", () => {
+  const harness = createDocumentHarness();
+  harness.document.querySelector = (selector: string) => selector.includes("astro-view-transitions-enabled") ? {} : null;
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/a" },
+  };
+  executeGoogleAnalyticsBootstrap(context);
+  harness.document.title = "A";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  context.location.href = "https://example.test/b";
+  harness.document.title = "B first";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  harness.document.title = "B second";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  (harness.appended[0]?.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+  const pageviews = (context.dataLayer as Array<ArrayLike<unknown>>)
+    .map(serializeGtagCommand)
+    .filter((command) => command[0] === "event" && command[1] === "page_view");
+  assert.deepEqual(JSON.parse(JSON.stringify(pageviews)), [["event", "page_view", {
+    page_location: "https://example.test/b",
+    page_referrer: "https://example.test/b",
+    page_title: "B second",
+    send_to: "G-TEST123",
+  }]]);
+});
+
+test("mutated provider scripts and unrelated global replacements never qualify as owned vendors", () => {
+  {
+    const harness = createDocumentHarness();
+    const context: vm.Context = { document: harness.document, location: { href: "https://example.test/" } };
+    executeFathomBootstrap(context);
+    const script = harness.appended[0] ?? {};
+    script.src = "https://attacker.example/fathom.js";
+    const unrelated = { trackEvent() {}, trackPageview() {} };
+    context.document.currentScript = script;
+    context.fathom = unrelated;
+    context.document.currentScript = undefined;
+    (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+    assert.equal(context.fathom, unrelated);
+    assert.equal(context.astroAnalytics.status().fathom, "adapter-not-loaded");
+  }
+  {
+    const harness = createDocumentHarness();
+    const context: vm.Context = { document: harness.document, location: { href: "https://example.test/" } };
+    executePlausibleBootstrap(context);
+    const script = harness.appended[0] ?? {};
+    script.src = "https://attacker.example/plausible.js";
+    const unrelated = () => undefined;
+    Object.defineProperty(unrelated, "l", { value: true });
+    context.document.currentScript = script;
+    context.plausible = unrelated;
+    context.document.currentScript = undefined;
+    (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+    assert.equal(context.plausible, unrelated);
+    assert.equal(context.astroAnalytics.status().plausible, "adapter-not-loaded");
+  }
+  {
+    const harness = createDocumentHarness();
+    const context: vm.Context = { document: harness.document, location: { href: "https://example.test/" } };
+    executeGoogleAnalyticsBootstrap(context);
+    const script = harness.appended[0] ?? {};
+    script.src = "https://attacker.example/gtag.js";
+    (script.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+    assert.equal(context.gtag, undefined);
+    assert.equal(context.dataLayer, undefined);
+    assert.equal(context.astroAnalytics.status()["google-analytics"], "adapter-not-loaded");
+  }
+  {
+    const harness = createDocumentHarness();
+    const context: vm.Context = { document: harness.document, location: { href: "https://example.test/" } };
+    executeMatomoBootstrap(context);
+    const script = harness.appended[0] ?? {};
+    script.src = "https://attacker.example/matomo.js";
+    activateMatomo(context, script);
+    assert.equal(context._paq, undefined);
+    assert.equal(context.Matomo, undefined);
+    assert.equal(context.astroAnalytics.status().matomo, "adapter-not-loaded");
+  }
 });

@@ -14,15 +14,19 @@ consumer qualification on September 13, 2026: Astro 7.3.2 and Starlight 0.42.0
 with Astro 7.3.2, both on Node.js 22.22.2.
 Starlight 0.41.11 with Astro 7.3.2 was qualified for alpha.3 on September 11,
 2026; it remains peer-eligible, but that historical result is not current
-alpha.11 execution evidence. Other versions admitted by the bounded peer ranges
+alpha.12 execution evidence. Other versions admitted by the bounded peer ranges
 are not yet compatibility claims.
 
 ## Current line
 
-The current Milestone 2 candidate is `0.1.0-alpha.11`:
+The current Milestone 2 candidate is `0.1.0-alpha.12`:
 
 - `0.1.0` identifies the first pre-stable feature line.
 - `alpha` states that the package is incomplete and not production-ready.
+- `.12` identifies the doctrine-complete F1 correction: lifecycle fallback and
+  `none`-mode reentry, virtual referrers, exact script/global provenance,
+  non-destructive cleanup, and hardened sandbox receipt behavior. Exact-package
+  consumer qualification and replacement review are pending.
 - `.11` identifies the cross-provider correction that gives Fathom, Plausible,
   GA4, and Matomo the completion-identity behavior already established for
   Umami, and closes readiness when Astro navigation observation is unavailable.
@@ -101,9 +105,9 @@ repository-driven sandbox, browser-runtime, and provider-side live gates by
 September 13, 2026. The later doctrine-complete readiness working review found
 cross-provider completion-identity and observer-readiness defects, so those
 earlier results remain historical evidence rather than an RC disposition.
-Alpha.11 is the working correction and has completed its clean stock Astro and
-Starlight consumer gates. The line may advance to an RC only after independent
-review closes and the feature set is believed complete.
+Alpha.12 is the working correction. The line may advance to an RC only after its
+exact package completes clean consumer qualification and simultaneous internal
+and external review closes without a blocking disposition.
 
 The package does not currently advertise the `astro-integration` discovery
 keyword because `astro add` invokes a zero-argument default factory and this

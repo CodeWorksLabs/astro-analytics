@@ -3,7 +3,7 @@
 ## Status
 
 Analytics for Astro has a public source repository. The current source candidate
-is `0.1.0-alpha.11`; there is no supported npm
+is `0.1.0-alpha.12`; there is no supported npm
 installation yet.
 
 Milestone 2 implements Fathom, Plausible, Google Analytics 4, Matomo, and Umami
@@ -17,8 +17,8 @@ pageviews and custom events. No queue or runtime consent activation API is inclu
 - An authorized local package artifact or workspace dependency
 
 These are manifest eligibility ranges, not proof that every matching version has
-been tested. The exact alpha.11 package completed clean consumer qualification
-on September 13, 2026. Its current exact consumer evidence is:
+been tested. Alpha.12 consumer qualification is pending. The most recent exact
+consumer evidence applies to alpha.11 and completed on September 13, 2026:
 
 | Consumer | Qualified versions |
 | --- | --- |
@@ -27,12 +27,12 @@ on September 13, 2026. Its current exact consumer evidence is:
 
 Starlight 0.41.11 with Astro 7.3.2 was qualified for the earlier alpha.3
 candidate on September 11, 2026. It remains eligible under the peer range, but
-that historical result is not current alpha.11 execution evidence.
+that historical result is not alpha.12 execution evidence.
 
 Astro 5.18.2 and 6.4.8 built successfully with the exact alpha.2 package used
 to establish this boundary, but their production dependency audits contain
 critical upstream Astro advisories. They and Starlight 0.35 through 0.40, whose
-peer requirements select those Astro majors, are excluded from the alpha.11
+peer requirements select those Astro majors, are excluded from the alpha.12
 eligibility range. Future versions matching the bounded peer ranges remain
 eligible, not automatically qualified compatibility claims.
 
