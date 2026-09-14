@@ -126,5 +126,5 @@ Astro operating knowledge belongs under `C:\CodeProjects\Platforms\Astro`.
 Repository rules are in `AGENTS.md`, and recovery state is maintained in
 `SUCCESSOR_CHECKPOINT.md`.
 
-The public source repository is
+The source repository is
 `https://github.com/CodeWorksLabs/astro-analytics`.

@@ -1,6 +1,6 @@
 # Analytics for Astro documentation
 
-These documents describe the public-source, npm-unpublished
+These documents describe the npm-unpublished
 `0.1.0-alpha.12` Milestone 2 correction candidate of
 `@codeworkslabs/astro-analytics`.
 
@@ -36,6 +36,6 @@ decision.
 | `@codeworkslabs/astro-analytics/client` | Browser-safe `track()` helper and event types |
 | `@codeworkslabs/astro-analytics/starlight` | Starlight plugin wrapper |
 
-The source repository is public. The npm package is currently unpublished and
+The source repository is private. The npm package is currently unpublished and
 retains its publication safeguard. Installation, release, site integration, and
 deployment remain separate authorized activities.

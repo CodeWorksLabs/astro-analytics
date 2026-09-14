@@ -2,7 +2,7 @@
 
 ## Status
 
-Analytics for Astro has a public source repository. The current source candidate
+Analytics for Astro is maintained in a private source repository. The current source candidate
 is `0.1.0-alpha.12`; there is no supported npm
 installation yet.
 

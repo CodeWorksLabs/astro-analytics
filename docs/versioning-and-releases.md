@@ -46,7 +46,7 @@ The current Milestone 2 candidate is `0.1.0-alpha.13`:
   pageview deduplication suppressed genuine same-URL ClientRouter completions.
   It is superseded and remains unpublished to npm.
 - `.8` identifies the reviewed and live-qualified Matomo adapter candidate;
-  its public source tag is `v0.1.0-alpha.8`, while npm publication remains
+  its immutable source tag is `v0.1.0-alpha.8`, while npm publication remains
   unauthorized and absent.
 - `.7` identifies the published source tag for the corrected Google Analytics 4 adapter candidate whose
   `gtag()` queue follows Google's canonical `arguments`-object contract.

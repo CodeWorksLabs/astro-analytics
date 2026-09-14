@@ -46,6 +46,11 @@ internal reviewer and the external Code Reviewer task. Iterate corrections,
 commits, and product pushes until both reviews return a non-blocking
 disposition.
 
+Before documentation synchronization, the source was found to retain stale
+claims that the now-private product repository was public. Those claims are
+being corrected in the product source before the next exact freeze; regenerate
+and rebind the artifact because shipped documentation bytes will change.
+
 ## Historical doctrine-complete alpha.12 correction — 2026-09-13
 
 The alpha.11 freeze received simultaneous internal and external
