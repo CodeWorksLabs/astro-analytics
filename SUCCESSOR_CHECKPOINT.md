@@ -2,6 +2,50 @@
 
 Updated: 2026-09-14
 
+## Active alpha.18 correction after F7 review — 2026-09-14
+
+The complete external F7 review blocked alpha.17 with two P1, two P2, and one
+P3 finding. A blocked query parameter was enforced only at initial bootstrap,
+so later ClientRouter navigation, delayed readiness, prerender activation,
+events, and virtual referrers could disclose the blocked URL. An obsolete
+sandbox timeout could delete a newer receipt. Sparse blocked-parameter arrays
+bypassed validation, Starlight used Astro's receipt key in one timeout, and the
+current-version sentence still named alpha.16. Internal review also identified
+the omitted Analytics docs test command and stale sandbox artifact allowlists.
+
+Product content commit `5fed4cfa06cbb4cf2defbe6ad1d019d4bd3d1c3a`
+identifies `0.1.0-alpha.18`. It publishes one immutable, reusable location
+policy per runtime token and exact blocked-name list; all five provider
+runtimes and the public event coordinator consult it at send/readiness,
+page-load, delayed flush, and event boundaries. A blocked observation discards
+pending URL/referrer/title state, and the first clean completion establishes a
+non-emitting baseline. Configuration now rejects sparse parameter arrays.
+Strict typecheck, 160/160 tests, and a zero-vulnerability production audit pass
+in the canonical product checkout.
+
+Two packages made independently from fresh exports of that exact commit are
+byte-identical. The 19-member alpha.18 archive is 52,122 bytes, SHA-256
+`c429112c9ccddb32d4e8119b410bca76102df1b83d5bf6e25cd4ef0a6abac7dd`,
+SHA-1 `9efa726e64516ae7b7f56f19c6f50b28c581ef3e`, and integrity
+`sha512-ROdy2QsGGz9dsuI6DNDwS3qo5Zr/dnSBY01bhNcbB0WkXVxR4dEX15uWG4KtwUKwpur/1O+fD+dyX3MK/3DCsw==`.
+
+Both sandbox worktrees contain the alpha.18 attempt-bound receipt correction:
+expiry callbacks are cancelled during recovery/pagehide and may clear only
+their own exact still-pending receipt. The Starlight callback uses its own
+storage key. Both local suites pass 8/8. These changes are not yet committed,
+and both consumers still bind the committed alpha.17 archive pending alpha.18
+artifact installation. The docs README now includes
+`npm run test:astro-analytics-docs`; its alpha.18 snapshot has not yet been
+generated. Accepted Brand Navigation commit `e215ec8` remains untouched.
+
+Next: commit and push this checkpoint, install the exact alpha.18 artifact in
+both consumers, regenerate the exact Analytics docs snapshot from product
+commit `5fed4cf`, update manifests/allowlists/checkpoints, commit the three
+local-only repositories, run every final gate from fresh exact Git exports,
+then launch simultaneous doctrine-complete F8 reviews. Do not push or deploy
+the sandboxes/docs, publish npm, tag, or create a release before review and
+Phil's decision.
+
 ## Active alpha.17 correction after F6 review — 2026-09-14
 
 Both doctrine-complete F6 reviews blocked alpha.16. Browser referrers omit URL
