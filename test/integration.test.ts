@@ -498,10 +498,20 @@ test("blocked query policy suspends every provider lifecycle and resumes from a 
     fathomEvents: fathomEvents.length,
     fathomPageviews: fathomPageviews.length,
     ga: context.dataLayer.length,
-    matomo: matomoCommands.length,
     plausible: plausibleCalls.length,
     umami: umamiCalls.length,
-  }, countsBeforeBlocked);
+  }, {
+    fathomEvents: countsBeforeBlocked.fathomEvents,
+    fathomPageviews: countsBeforeBlocked.fathomPageviews,
+    ga: countsBeforeBlocked.ga,
+    plausible: countsBeforeBlocked.plausible,
+    umami: countsBeforeBlocked.umami,
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(matomoCommands.slice(countsBeforeBlocked.matomo))), [
+    ["setReferrerUrl", ""],
+    ["setCustomUrl", "https://example.test/recovered/"],
+    ["setDocumentTitle", "Recovered"],
+  ]);
 
   completeRoute("https://example.test/next/", "Next");
   assert.equal(context.astroAnalytics.track("recovered_event").ok, true);
@@ -519,6 +529,91 @@ test("blocked query policy suspends every provider lifecycle and resumes from a 
   assert.ok(matomoCommands.length > countsBeforeBlocked.matomo);
   assert.ok(plausibleCalls.length > countsBeforeBlocked.plausible);
   assert.ok(umamiCalls.length > countsBeforeBlocked.umami);
+});
+
+test("initial blocked ClientRouter startup carries the first clean completion without leaking its referrer", () => {
+  for (const pageviews of ["astro", "provider", "none"] as const) {
+    const injected: string[] = [];
+    runSetup(astroAnalytics({
+      blockedQueryParameters: ["cwl_journey"],
+      events: true,
+      providers: [
+        { name: "fathom", pageviews, siteId: "ABCDEFG" },
+        { name: "plausible", pageviews, scriptSrc: "https://plausible.example/js/pa-TEST.js" },
+        { name: "google-analytics", measurementId: "G-TEST123", pageviews, consent: { mode: "immediate" } },
+        { name: "matomo", eventCategory: "Astro", pageviews, siteId: "1", trackerUrl: "https://analytics.example/matomo.php" },
+        { name: "umami", pageviews, scriptSrc: "https://analytics.example/script.js", websiteId: "e676c9b4-11e4-4ef1-a4d7-87001773e9f2" },
+      ],
+    }), "build", injected);
+
+    const harness = createDocumentHarness();
+    harness.document.querySelector = () => ({});
+    harness.document.referrer = "https://example.test/private/?cwl_journey=REFERRER_SECRET";
+    harness.document.title = "Private";
+    const context: vm.Context = {
+      document: harness.document,
+      location: { href: "https://example.test/private/?cwl_journey=STARTUP_SECRET" },
+      URL,
+    };
+    vm.runInNewContext(injected[0]?.slice("page:".length) ?? "", context);
+    assert.equal(harness.appended.length, 0);
+
+    context.location.href = "https://example.test/first-clean/";
+    harness.document.title = "First clean";
+    for (const listener of Array.from(harness.documentListeners.get("astro:page-load") ?? [])) listener();
+    assert.equal(harness.appended.length, 5);
+
+    const byId = (id: string) => harness.appended.find((script) => script.id === id) ?? {};
+    const fathomPageviews: unknown[][] = [];
+    const fathomEvents: string[] = [];
+    activateFathom(context, byId(FATHOM_SCRIPT_ID), {
+      trackEvent(name: string) { fathomEvents.push(name); },
+      trackPageview(...args: unknown[]) { fathomPageviews.push(args); },
+    });
+    const plausibleStub = context.plausible as { o?: { transformRequest?: (payload: Record<string, unknown>) => Record<string, unknown> } };
+    const plausibleTransform = plausibleStub.o?.transformRequest;
+    const plausibleCalls = activatePlausible(context, byId(PLAUSIBLE_SCRIPT_ID));
+    const googleScript = byId(GOOGLE_ANALYTICS_SCRIPT_ID);
+    (googleScript.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+    const matomoCommands = activateMatomo(context, byId(MATOMO_SCRIPT_ID));
+    const umamiCalls = activateUmami(context, byId(UMAMI_SCRIPT_ID));
+
+    const result = context.astroAnalytics.track("first_clean_event");
+    assert.equal(result.ok, true, `${pageviews}: ${JSON.stringify(result)}`);
+    assert.equal(fathomEvents.length, 1);
+    assert.deepEqual(JSON.parse(JSON.stringify(matomoCommands.slice(-4))), [
+      ["setReferrerUrl", ""],
+      ["setCustomUrl", "https://example.test/first-clean/"],
+      ["setDocumentTitle", "First clean"],
+      ["trackEvent", "Astro", "first_clean_event"],
+    ]);
+    if (typeof plausibleTransform === "function") {
+      assert.equal(plausibleTransform({ r: "https://example.test/?cwl_journey=REFERRER_SECRET" }).r, "");
+    }
+
+    context.location.href = "https://example.test/second-clean/";
+    harness.document.title = "Second clean";
+    for (const listener of Array.from(harness.documentListeners.get("astro:page-load") ?? [])) listener();
+    const umamiPayloads = umamiCalls.flatMap((args) => {
+      const candidate = args[0];
+      return typeof candidate === "function" ? [candidate({})] : [];
+    });
+    const emitted = JSON.stringify({
+      dataLayer: context.dataLayer,
+      fathomPageviews,
+      matomoCommands,
+      plausibleCalls,
+      umamiPayloads,
+    });
+    assert.equal(emitted.includes("cwl_journey"), false, pageviews);
+    assert.equal(emitted.includes("REFERRER_SECRET"), false, pageviews);
+    assert.equal(emitted.includes("STARTUP_SECRET"), false, pageviews);
+    if (pageviews === "none") {
+      assert.equal(fathomPageviews.length, 0);
+    } else {
+      assert.deepEqual(JSON.parse(JSON.stringify(fathomPageviews)), [[{ referrer: "https://example.test/first-clean/" }]]);
+    }
+  }
 });
 
 test("Matomo injects without the optional event client", () => {

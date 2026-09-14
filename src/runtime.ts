@@ -134,8 +134,9 @@ export function createBootstrapScript(
             Reflect.get(policy, "runtimeToken") !== config.runtimeToken) return false;
         const keys = Reflect.ownKeys(policy);
         const allows = Reflect.get(policy, "allowsCurrentLocation");
-        return keys.length === 3 && keys.includes("allowsCurrentLocation") &&
+        return keys.length === 6 && keys.includes("allowsCurrentLocation") && keys.includes("allowsUrl") &&
           keys.includes("blockedQueryParameters") && keys.includes("runtimeToken") &&
+          keys.includes("setStartupPageLoadObserved") && keys.includes("startupPageLoadObserved") &&
           typeof allows === "function" && Reflect.apply(allows, policy, []) === true;
       } catch { return false; }
     };
@@ -391,10 +392,33 @@ export function createFathomBootstrapScript(
         const allows = (typeof policy === "object" || typeof policy === "function") && policy !== null
           ? Reflect.get(policy, "allowsCurrentLocation")
           : undefined;
+        const keys = Reflect.ownKeys(policy);
         return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          Reflect.ownKeys(policy).length === 3 &&
-          Reflect.ownKeys(policy).includes("blockedQueryParameters") && typeof allows === "function" &&
+          keys.length === 6 && keys.includes("allowsUrl") && keys.includes("blockedQueryParameters") &&
+          keys.includes("setStartupPageLoadObserved") && keys.includes("startupPageLoadObserved") && typeof allows === "function" &&
           Reflect.apply(allows, policy, []) === true;
+      } catch { return false; }
+    };
+    const isUrlAllowed = (value) => {
+      if (config.locationPolicyRequired !== true) return true;
+      try {
+        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
+        const policy = Reflect.get(root, policyKey);
+        const allows = Reflect.get(policy, "allowsUrl");
+        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
+          Reflect.ownKeys(policy).length === 6 && typeof allows === "function" &&
+          Reflect.apply(allows, policy, [value]) === true;
+      } catch { return false; }
+    };
+    const startupPageLoadObserved = () => {
+      if (config.locationPolicyRequired !== true) return false;
+      try {
+        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
+        const policy = Reflect.get(root, policyKey);
+        const observed = Reflect.get(policy, "startupPageLoadObserved");
+        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
+          Reflect.ownKeys(policy).length === 6 && typeof observed === "function" &&
+          Reflect.apply(observed, policy, []) === true;
       } catch { return false; }
     };
     try {
@@ -784,17 +808,21 @@ export function createFathomBootstrapScript(
         completedNavigationUrl = undefined;
         return;
       }
-      const closesObservationGap = navigationObservationGap;
+      const initialReferrer = typeof completedNavigationUrl === "string"
+        ? undefined
+        : (() => {
+            try {
+              const value = Reflect.get(documentValue, "referrer");
+              if (typeof value !== "string") return "";
+              return isUrlAllowed(value) ? value : null;
+            } catch { return ""; }
+          })();
+      const closesObservationGap = navigationObservationGap || initialReferrer === null;
       const referrer = closesObservationGap
         ? undefined
         : typeof completedNavigationUrl === "string"
           ? completedNavigationUrl
-          : (() => {
-              try {
-                const value = Reflect.get(documentValue, "referrer");
-                return typeof value === "string" ? value : "";
-              } catch { return ""; }
-            })();
+          : initialReferrer;
       navigationObservationGap = false;
       navigationInFlight = false;
       completedNavigationUrl = href;
@@ -900,6 +928,10 @@ export function createFathomBootstrapScript(
         navigationObservationGap = true;
         failRuntime();
         return;
+      }
+      if (startupPageLoadObserved()) {
+        navigationObservationGap = true;
+        pageLoadListener();
       }
     }
     if (config.pageviews !== "none") {
@@ -1029,10 +1061,33 @@ export function createPlausibleBootstrapScript(
         const allows = (typeof policy === "object" || typeof policy === "function") && policy !== null
           ? Reflect.get(policy, "allowsCurrentLocation")
           : undefined;
+        const keys = Reflect.ownKeys(policy);
         return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          Reflect.ownKeys(policy).length === 3 &&
-          Reflect.ownKeys(policy).includes("blockedQueryParameters") && typeof allows === "function" &&
+          keys.length === 6 && keys.includes("allowsUrl") && keys.includes("blockedQueryParameters") &&
+          keys.includes("setStartupPageLoadObserved") && keys.includes("startupPageLoadObserved") && typeof allows === "function" &&
           Reflect.apply(allows, policy, []) === true;
+      } catch { return false; }
+    };
+    const isUrlAllowed = (value) => {
+      if (config.locationPolicyRequired !== true) return true;
+      try {
+        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
+        const policy = Reflect.get(root, policyKey);
+        const allows = Reflect.get(policy, "allowsUrl");
+        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
+          Reflect.ownKeys(policy).length === 6 && typeof allows === "function" &&
+          Reflect.apply(allows, policy, [value]) === true;
+      } catch { return false; }
+    };
+    const startupPageLoadObserved = () => {
+      if (config.locationPolicyRequired !== true) return false;
+      try {
+        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
+        const policy = Reflect.get(root, policyKey);
+        const observed = Reflect.get(policy, "startupPageLoadObserved");
+        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
+          Reflect.ownKeys(policy).length === 6 && typeof observed === "function" &&
+          Reflect.apply(observed, policy, []) === true;
       } catch { return false; }
     };
     try {
@@ -1269,8 +1324,13 @@ export function createPlausibleBootstrapScript(
           captureOnLocalhost: config.captureOnLocalhost === true,
           ...(typeof config.endpoint === "string" ? { endpoint: config.endpoint } : {}),
           transformRequest(payload) {
-            if ((typeof payload === "object" || typeof payload === "function") && payload !== null &&
-                typeof requestReferrer === "string") Reflect.set(payload, "r", requestReferrer);
+            if ((typeof payload === "object" || typeof payload === "function") && payload !== null) {
+              if (typeof requestReferrer === "string") Reflect.set(payload, "r", requestReferrer);
+              else {
+                const referrer = Reflect.get(payload, "r");
+                if (typeof referrer === "string" && !isUrlAllowed(referrer)) Reflect.set(payload, "r", "");
+              }
+            }
             return payload;
           },
         };
@@ -1352,7 +1412,7 @@ export function createPlausibleBootstrapScript(
               : (() => {
                   try {
                     const value = Reflect.get(documentValue, "referrer");
-                    return typeof value === "string" ? value : "";
+                    return typeof value === "string" && isUrlAllowed(value) ? value : "";
                   } catch { return ""; }
                 })();
           navigationObservationGap = false;
@@ -1373,6 +1433,11 @@ export function createPlausibleBootstrapScript(
           try {
             Reflect.apply(addEventListener, documentValue, ["astro:page-load", pageLoadListener]);
           } catch { navigationObservationGap = true; fail(); return; }
+          if (startupPageLoadObserved()) {
+            navigationObservationGap = true;
+            locationObservationGap = true;
+            pageLoadListener();
+          }
           const hasClientRouter = (() => {
             try {
               const querySelector = Reflect.get(documentValue, "querySelector");
@@ -1474,10 +1539,33 @@ export function createGoogleAnalyticsBootstrapScript(
         const allows = (typeof policy === "object" || typeof policy === "function") && policy !== null
           ? Reflect.get(policy, "allowsCurrentLocation")
           : undefined;
+        const keys = Reflect.ownKeys(policy);
         return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          Reflect.ownKeys(policy).length === 3 &&
-          Reflect.ownKeys(policy).includes("blockedQueryParameters") && typeof allows === "function" &&
+          keys.length === 6 && keys.includes("allowsUrl") && keys.includes("blockedQueryParameters") &&
+          keys.includes("setStartupPageLoadObserved") && keys.includes("startupPageLoadObserved") && typeof allows === "function" &&
           Reflect.apply(allows, policy, []) === true;
+      } catch { return false; }
+    };
+    const isUrlAllowed = (value) => {
+      if (config.locationPolicyRequired !== true) return true;
+      try {
+        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
+        const policy = Reflect.get(root, policyKey);
+        const allows = Reflect.get(policy, "allowsUrl");
+        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
+          Reflect.ownKeys(policy).length === 6 && typeof allows === "function" &&
+          Reflect.apply(allows, policy, [value]) === true;
+      } catch { return false; }
+    };
+    const startupPageLoadObserved = () => {
+      if (config.locationPolicyRequired !== true) return false;
+      try {
+        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
+        const policy = Reflect.get(root, policyKey);
+        const observed = Reflect.get(policy, "startupPageLoadObserved");
+        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
+          Reflect.ownKeys(policy).length === 6 && typeof observed === "function" &&
+          Reflect.apply(observed, policy, []) === true;
       } catch { return false; }
     };
     try {
@@ -1794,6 +1882,18 @@ export function createGoogleAnalyticsBootstrapScript(
         Reflect.defineProperty(providerConfig, "send_page_view", {
           configurable: false, enumerable: true, value: false, writable: false,
         });
+        try {
+          const documentReferrer = Reflect.get(documentValue, "referrer");
+          if (typeof documentReferrer === "string" && !isUrlAllowed(documentReferrer)) {
+            Reflect.defineProperty(providerConfig, "page_referrer", {
+              configurable: false, enumerable: true, value: "", writable: false,
+            });
+          }
+        } catch {
+          Reflect.defineProperty(providerConfig, "page_referrer", {
+            configurable: false, enumerable: true, value: "", writable: false,
+          });
+        }
         Reflect.apply(gtag, root, ["config", config.measurementId, providerConfig]);
 
         const script = Reflect.apply(createElement, documentValue, ["script"]);
@@ -1823,7 +1923,7 @@ export function createGoogleAnalyticsBootstrapScript(
               : (() => {
                   try {
                     const value = Reflect.get(documentValue, "referrer");
-                    return typeof value === "string" ? value : "";
+                    return typeof value === "string" && isUrlAllowed(value) ? value : "";
                   } catch { return ""; }
                 })();
           navigationObservationGap = false;
@@ -1854,6 +1954,11 @@ export function createGoogleAnalyticsBootstrapScript(
           try {
             Reflect.apply(addEventListener, documentValue, ["astro:page-load", localPageLoadListener]);
           } catch { navigationObservationGap = true; cleanup(); return; }
+          if (startupPageLoadObserved()) {
+            navigationObservationGap = true;
+            locationObservationGap = true;
+            localPageLoadListener();
+          }
           const hasClientRouter = (() => {
             try {
               const querySelector = Reflect.get(documentValue, "querySelector");
@@ -1938,10 +2043,33 @@ export function createMatomoBootstrapScript(
         const allows = (typeof policy === "object" || typeof policy === "function") && policy !== null
           ? Reflect.get(policy, "allowsCurrentLocation")
           : undefined;
+        const keys = Reflect.ownKeys(policy);
         return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          Reflect.ownKeys(policy).length === 3 &&
-          Reflect.ownKeys(policy).includes("blockedQueryParameters") && typeof allows === "function" &&
+          keys.length === 6 && keys.includes("allowsUrl") && keys.includes("blockedQueryParameters") &&
+          keys.includes("setStartupPageLoadObserved") && keys.includes("startupPageLoadObserved") && typeof allows === "function" &&
           Reflect.apply(allows, policy, []) === true;
+      } catch { return false; }
+    };
+    const isUrlAllowed = (value) => {
+      if (config.locationPolicyRequired !== true) return true;
+      try {
+        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
+        const policy = Reflect.get(root, policyKey);
+        const allows = Reflect.get(policy, "allowsUrl");
+        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
+          Reflect.ownKeys(policy).length === 6 && typeof allows === "function" &&
+          Reflect.apply(allows, policy, [value]) === true;
+      } catch { return false; }
+    };
+    const startupPageLoadObserved = () => {
+      if (config.locationPolicyRequired !== true) return false;
+      try {
+        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
+        const policy = Reflect.get(root, policyKey);
+        const observed = Reflect.get(policy, "startupPageLoadObserved");
+        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
+          Reflect.ownKeys(policy).length === 6 && typeof observed === "function" &&
+          Reflect.apply(observed, policy, []) === true;
       } catch { return false; }
     };
     try {
@@ -1967,6 +2095,7 @@ export function createMatomoBootstrapScript(
     let vendorReady = false;
     let vendorScript;
     let navigationObservationGap = false;
+    let suppressNextCompletionPageview = false;
     let navigationObserverInstalled = false;
     let initialDocumentScheduled = false;
     let completedNavigationCompletion = 0;
@@ -1979,6 +2108,7 @@ export function createMatomoBootstrapScript(
     let completedNavigationUrl;
     let completedNavigationTitle;
     let completedNavigationReferrer;
+    let completedNavigationIsBaseline = false;
     const sameConfig = (value) => {
       try {
         return (typeof value === "object" || typeof value === "function") && value !== null &&
@@ -2111,7 +2241,9 @@ export function createMatomoBootstrapScript(
       if (!referrerIsUnknown && referrer === undefined) {
         try {
           const documentReferrer = Reflect.get(documentValue, "referrer");
-          if (typeof documentReferrer === "string" && documentReferrer !== "") referrer = documentReferrer;
+          if (typeof documentReferrer === "string" && documentReferrer !== "" && isUrlAllowed(documentReferrer)) {
+            referrer = documentReferrer;
+          }
         } catch {}
       }
       const title = typeof explicitTitle === "string" ? explicitTitle : readTitle();
@@ -2124,20 +2256,20 @@ export function createMatomoBootstrapScript(
       return false;
     };
     const flushCompletedNavigation = (generation) => {
-      if (config.pageviews === "none" || navigationObservationGap ||
-          !active || activeGeneration !== generation || isPrerendering()) return;
+      if (navigationObservationGap || !active || activeGeneration !== generation || isPrerendering()) return;
       const href = readHref();
       if (typeof completedNavigationUrl !== "string" || href !== completedNavigationUrl) return;
       const pending = pendingPageviewUrl;
       const pendingReferrer = pendingPageviewReferrer;
       const pendingCompletion = pendingPageviewCompletion;
-      if (config.pageviews === "none") {
-        if (applyVendorContext(completedNavigationUrl, completedNavigationReferrer, completedNavigationTitle, completedNavigationCompletion)) {
-          pendingPageviewUrl = undefined;
-          pendingPageviewReferrer = undefined;
-          pendingPageviewCompletion = undefined;
-        }
-      } else if (typeof pending === "string" && pending === completedNavigationUrl) {
+      if (config.pageviews === "none" || typeof pending !== "string") {
+        if (vendorContextCompletion !== completedNavigationCompletion &&
+            !applyVendorContext(completedNavigationUrl, completedNavigationReferrer,
+              completedNavigationTitle, completedNavigationCompletion)) return;
+        pendingPageviewUrl = undefined;
+        pendingPageviewReferrer = undefined;
+        pendingPageviewCompletion = undefined;
+      } else if (pending === completedNavigationUrl) {
         if (sendPageview(pending, generation, pendingReferrer, completedNavigationTitle, pendingCompletion)) {
           pendingPageviewUrl = undefined;
           pendingPageviewReferrer = undefined;
@@ -2149,12 +2281,14 @@ export function createMatomoBootstrapScript(
       const href = readHref();
       if (typeof href !== "string") {
         navigationObservationGap = true;
+        suppressNextCompletionPageview = true;
         pendingPageviewUrl = undefined;
         pendingPageviewReferrer = undefined;
         pendingPageviewCompletion = undefined;
         completedNavigationUrl = undefined;
         completedNavigationTitle = undefined;
         completedNavigationReferrer = undefined;
+        completedNavigationIsBaseline = false;
         vendorContextCompletion = undefined;
         return;
       }
@@ -2163,11 +2297,20 @@ export function createMatomoBootstrapScript(
       completedNavigationUrl = href;
       completedNavigationCompletion += 1;
       completedNavigationTitle = readTitle();
-      pendingPageviewUrl = href;
-      pendingPageviewReferrer = completedNavigationReferrer;
-      pendingPageviewCompletion = completedNavigationCompletion;
+      completedNavigationIsBaseline = closesObservationGap && suppressNextCompletionPageview;
+      suppressNextCompletionPageview = false;
+      pendingPageviewUrl = completedNavigationIsBaseline || config.pageviews === "none" ? undefined : href;
+      pendingPageviewReferrer = completedNavigationIsBaseline || config.pageviews === "none" ? undefined : completedNavigationReferrer;
+      pendingPageviewCompletion = completedNavigationIsBaseline || config.pageviews === "none" ? undefined : completedNavigationCompletion;
       if (closesObservationGap) {
         navigationObservationGap = false;
+        if (active && typeof activeGeneration === "number" && vendorReady &&
+            applyVendorContext(completedNavigationUrl, completedNavigationReferrer,
+              completedNavigationTitle, completedNavigationCompletion)) {
+          pendingPageviewUrl = undefined;
+          pendingPageviewReferrer = undefined;
+          pendingPageviewCompletion = undefined;
+        }
         try { run(config); } catch {}
         return;
       }
@@ -2194,6 +2337,11 @@ export function createMatomoBootstrapScript(
         registerHandler();
         return;
       }
+      if (startupPageLoadObserved() && typeof completedNavigationUrl !== "string") {
+        navigationObservationGap = true;
+        suppressNextCompletionPageview = true;
+        recordCompletedNavigation();
+      }
       if (!hasClientRouter() && !navigationObservationGap && typeof completedNavigationUrl !== "string" && !initialDocumentScheduled) {
         initialDocumentScheduled = true;
         try {
@@ -2216,9 +2364,6 @@ export function createMatomoBootstrapScript(
       if (active) {
         if (!vendorReady && matchesOwnedVendor()) {
           vendorReady = true;
-          pendingPageviewUrl = completedNavigationUrl;
-          pendingPageviewReferrer = completedNavigationReferrer;
-          pendingPageviewCompletion = completedNavigationCompletion;
           flushCompletedNavigation(activeGeneration);
         }
         registerHandler();
@@ -2229,9 +2374,12 @@ export function createMatomoBootstrapScript(
       vendorLoadProven = false;
       vendorReady = false;
       vendorContextCompletion = undefined;
-      pendingPageviewUrl = completedNavigationUrl;
-      pendingPageviewReferrer = completedNavigationReferrer;
-      pendingPageviewCompletion = completedNavigationCompletion;
+      pendingPageviewUrl = completedNavigationIsBaseline || config.pageviews === "none"
+        ? undefined : completedNavigationUrl;
+      pendingPageviewReferrer = completedNavigationIsBaseline || config.pageviews === "none"
+        ? undefined : completedNavigationReferrer;
+      pendingPageviewCompletion = completedNavigationIsBaseline || config.pageviews === "none"
+        ? undefined : completedNavigationCompletion;
       const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
       handler = Object.freeze({
         __astroAnalyticsBrand: brand,
@@ -2455,10 +2603,33 @@ export function createUmamiBootstrapScript(
         const allows = (typeof policy === "object" || typeof policy === "function") && policy !== null
           ? Reflect.get(policy, "allowsCurrentLocation")
           : undefined;
+        const keys = Reflect.ownKeys(policy);
         return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          Reflect.ownKeys(policy).length === 3 &&
-          Reflect.ownKeys(policy).includes("blockedQueryParameters") && typeof allows === "function" &&
+          keys.length === 6 && keys.includes("allowsUrl") && keys.includes("blockedQueryParameters") &&
+          keys.includes("setStartupPageLoadObserved") && keys.includes("startupPageLoadObserved") && typeof allows === "function" &&
           Reflect.apply(allows, policy, []) === true;
+      } catch { return false; }
+    };
+    const isUrlAllowed = (value) => {
+      if (config.locationPolicyRequired !== true) return true;
+      try {
+        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
+        const policy = Reflect.get(root, policyKey);
+        const allows = Reflect.get(policy, "allowsUrl");
+        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
+          Reflect.ownKeys(policy).length === 6 && typeof allows === "function" &&
+          Reflect.apply(allows, policy, [value]) === true;
+      } catch { return false; }
+    };
+    const startupPageLoadObserved = () => {
+      if (config.locationPolicyRequired !== true) return false;
+      try {
+        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
+        const policy = Reflect.get(root, policyKey);
+        const observed = Reflect.get(policy, "startupPageLoadObserved");
+        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
+          Reflect.ownKeys(policy).length === 6 && typeof observed === "function" &&
+          Reflect.apply(observed, policy, []) === true;
       } catch { return false; }
     };
     try {
@@ -2522,7 +2693,7 @@ export function createUmamiBootstrapScript(
     const readDocumentReferrer = () => {
       try {
         const referrer = Reflect.get(documentValue, "referrer");
-        return typeof referrer === "string" ? referrer : "";
+        return typeof referrer === "string" && isUrlAllowed(referrer) ? referrer : "";
       } catch { return ""; }
     };
     const isPrerendering = () => {
@@ -2670,7 +2841,11 @@ export function createUmamiBootstrapScript(
           return false;
         }
         Reflect.apply(addEventListener, documentValue, ["astro:page-load", recordPageLoad]);
-        if (!hasClientRouter()) {
+        if (startupPageLoadObserved()) {
+          observationGap = true;
+          locationObservationGap = true;
+          recordPageLoad();
+        } else if (!hasClientRouter()) {
           const readyState = Reflect.get(documentValue, "readyState");
           if (readyState === "interactive" || readyState === "complete") {
             recordInitialDocument();

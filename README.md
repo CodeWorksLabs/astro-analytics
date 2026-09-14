@@ -2,7 +2,7 @@
 
 `@codeworkslabs/astro-analytics` is an experimental reusable analytics
 integration for Astro. The current source candidate is
-`0.1.0-alpha.18` and is not published to npm.
+`0.1.0-alpha.19` and is not published to npm.
 
 > [!IMPORTANT]
 > Milestone 2 includes real Fathom, Plausible, Google Analytics 4, Matomo, and
@@ -38,7 +38,9 @@ export default defineConfig({
 
 `blockedQueryParameters` is an optional fail-closed privacy boundary. When the
 current URL contains any listed name, Analytics for Astro initializes neither
-its event client nor any provider runtime on that document.
+its event client nor any provider runtime on that route. Provider-bound
+referrer context is also screened so a blocked identity cannot return through
+the document's original referrer after a clean ClientRouter transition.
 
 This example validates the Fathom configuration, loads Fathom's deferred embed
 during production builds, tracks provider-owned pageviews, and connects the

@@ -1,7 +1,7 @@
 # Analytics for Astro documentation
 
 These documents describe the npm-unpublished
-`0.1.0-alpha.18` Milestone 2 correction candidate of
+`0.1.0-alpha.19` Milestone 2 correction candidate of
 `@codeworkslabs/astro-analytics`.
 
 Milestone 2 provides real Fathom, Plausible, Google Analytics 4, Matomo, and Umami adapters for

@@ -7,6 +7,16 @@ release claim.
 
 ## Unreleased
 
+## 0.1.0-alpha.19 - Candidate
+
+- Screen blocked query identities from initial referrer context across all five
+  adapters and event/pageview modes.
+- Carry an initial blocked-to-clean ClientRouter completion into newly started
+  runtimes without emitting a synthetic baseline pageview.
+- Establish Matomo's first clean recovery context before accepting events.
+- Make sandbox expiry-cleanup failure feedback truthful and reconcile consumer
+  CI source identities with the admitted package content.
+
 ## 0.1.0-alpha.18 - Candidate
 
 - Enforce blocked-query privacy throughout ClientRouter navigation, provider

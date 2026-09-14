@@ -20,7 +20,11 @@ only when all of these are true:
 When `blockedQueryParameters` is configured, the injected bootstrap first reads
 the actual browser URL. A matching parameter—or an unreadable or malformed
 browser location—returns before the event client or any provider runtime
-initializes.
+initializes. The same immutable policy screens provider-bound referrer URLs.
+When a blocked initial route becomes clean through ClientRouter, the triggering
+completion is carried into each newly started runtime as a non-emitting
+baseline; the runtime does not miss that dispatch or reuse its blocked
+document referrer.
 
 Enabled immediate-consent providers load for pageview analytics even when `events` is false. That flag only
 controls installation of `globalThis.astroAnalytics`.

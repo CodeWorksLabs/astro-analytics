@@ -14,15 +14,18 @@ consumer qualification on September 13, 2026: Astro 7.3.2 and Starlight 0.42.0
 with Astro 7.3.2, both on Node.js 22.22.2.
 Starlight 0.41.11 with Astro 7.3.2 was qualified for alpha.3 on September 11,
 2026; it remains peer-eligible, but that historical result is not current
-alpha.18 execution evidence. Other versions admitted by the bounded peer ranges
+alpha.19 execution evidence. Other versions admitted by the bounded peer ranges
 are not yet compatibility claims.
 
 ## Current line
 
-The current Milestone 2 candidate is `0.1.0-alpha.18`:
+The current Milestone 2 candidate is `0.1.0-alpha.19`:
 
 - `0.1.0` identifies the first pre-stable feature line.
 - `alpha` states that the package is incomplete and not production-ready.
+- `.19` closes F8 findings for blocked initial referrers, first-clean
+  ClientRouter readiness/context, Matomo recovery context, consumer CI source
+  identity, sandbox expiry feedback, and successor continuity.
 - `.18` extends blocked-query privacy across the complete runtime lifecycle,
   rejects sparse parameter lists, and binds sandbox expiry to one attempt.
 - `.17` adds a pre-initialization privacy boundary for blocked query parameters,
