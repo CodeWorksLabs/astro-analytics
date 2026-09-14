@@ -7,6 +7,13 @@ release claim.
 
 ## Unreleased
 
+## 0.1.0-alpha.15 - Candidate
+
+- Reconcile shipped versioning and review-status documentation with the F4
+  alpha.14 package/runtime pass and complete-family sandbox block.
+- Preserve the alpha.14 runtime unchanged while assigning a new immutable
+  candidate version because the packaged documentation bytes changed.
+
 ## 0.1.0-alpha.14 - Candidate
 
 - Preserve GA4 configuration as parsed data through generated inline bootstrap
