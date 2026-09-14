@@ -2,7 +2,50 @@
 
 Updated: 2026-09-14
 
-## Active alpha.16 correction after F5 review — 2026-09-14
+## Active alpha.17 correction after F6 review — 2026-09-14
+
+Both doctrine-complete F6 reviews blocked alpha.16. Browser referrers omit URL
+fragments, so the sandbox rejected a valid fragment-preserving handoff; the
+one-second handoff timer could destroy a valid receipt during slow navigation;
+a direct nonce-bearing destination initialized provider runtimes; a source
+navigation no-op retained its pending receipt while reporting false progress;
+and the shipped README still named alpha.15. Starlight's ignored installed
+package was also stale even though committed inputs correctly bound alpha.16.
+
+Product commit `38a0857cf97f9953598572b6fc675174fe967ea3`
+(tree `bb25c8b36b6803bcc1c36bf56e4e65ad5e98150c`) is pushed to public `main`.
+It identifies `0.1.0-alpha.17` and adds fail-closed
+`blockedQueryParameters`: a matching current URL returns before the event client
+or any provider runtime initializes. Strict typecheck, 159/159 tests, and a
+zero-vulnerability production audit passed.
+
+Two exact Git-export packs were byte-identical. The canonical 19-member archive
+is 50,839 bytes, SHA-256
+`d72dd16a33ea5794d57d3f952886bc235d22fa335eea92f679018af6ce30a14c`,
+SHA-1 `558b99303d2735facb1be1ce90694ddd9a9d60a6`, and integrity
+`sha512-HDn4C+mggSd7zC1xae5IRvSOO2cK7YLliETEu4lPCdFQzJOrrhwOQbuqFSLKH3P1rLiBDU3OIJmcb0xbBB+p8w==`.
+
+Both local-only consumer commits bind that artifact, block `cwl_journey` before
+runtime initialization, store the exact clean destination in receipt v4, accept
+browser-real fragmentless referrers, and defer no-op cleanup until the receipt
+cannot remain valid. Astro is `c4b6cad68983e14cab0d345ce21591b9fb64a5f7`;
+Starlight is `f897ac0f50065bdf85f6d6946eddc72c4077f574`. Their clean install,
+audit, 7/7 tests, check, build, and Wrangler dry-run gates passed. Starlight's
+ignored install now reports alpha.17. Neither consumer was pushed or deployed.
+
+Docs commit `7376c23b00df989224a991820956bc18f0d05699` is local only and contains
+the exact alpha.17 ten-page snapshot. Clean install, production audit zero,
+all nine Analytics assertions, exact ordinary verification, all 26 Brand
+Navigation tests, offline verification, zero Astro diagnostics, 33-page build,
+and 130-asset Wrangler dry-run passed. Accepted Brand Navigation commit
+`e215ec8` was unchanged.
+
+Next: add final checkpoint-only commits, replay exact-archive gates, freeze
+identities, and launch simultaneous F7 reviews. No sandbox/docs
+push, deployment, publication, release, or tag is authorized before a
+nonblocking review and Phil's decision.
+
+## Historical alpha.16 correction after F5 review — 2026-09-14
 
 The internal F5 review was incomplete after a reviewer-created workspace
 integrity event, but it established three P1 blockers before stopping: failed
