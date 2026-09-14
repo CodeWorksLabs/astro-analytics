@@ -356,6 +356,7 @@ export function createFathomBootstrapScript(
     let completedNavigationUrl;
     let lastTrackedCompletion;
     let navigationObservationGap = false;
+    let navigationInFlight = false;
     const coordinatorInstallHref = (() => {
       try {
         const href = Reflect.get(Reflect.get(root, "location"), "href");
@@ -581,8 +582,11 @@ export function createFathomBootstrapScript(
           writable: true,
         }) === true && Reflect.get(documentValue, stateKey) === previousState;
         if (!restored) return;
-        installEventClient(previousLifecycle, false, previousState, () =>
-          Reflect.get(previousReadiness, "ready") === true,
+        installEventClient(previousLifecycle, false, previousState, () => {
+          const eventsReady = Reflect.get(previousReadiness, "eventsReady");
+          return typeof eventsReady === "function" &&
+            Reflect.apply(eventsReady, previousReadiness, []) === true;
+        },
         () => Reflect.get(previousEvents, "enabled") === true,
         );
         const retryPageview = Reflect.get(previousReadiness, "retryPageview");
@@ -657,8 +661,9 @@ export function createFathomBootstrapScript(
     });
     const readiness = Object.freeze({
       abort() { failRuntime(); },
+      eventsReady() { return readinessVerified && hasUsableFathomEvents(); },
       get installHref() { return installHref; },
-      get ready() { return readinessVerified; },
+      get ready() { return readinessVerified && hasUsableFathom(); },
       retryPageview() { flushReadyPageviews(); }
     });
     const readHref = () => {
@@ -680,13 +685,20 @@ export function createFathomBootstrapScript(
         return true;
       } catch { return false; }
     };
+    const hasUsableFathomEvents = () => {
+      try {
+        if (!hasUsableFathom()) return false;
+        const fathom = Reflect.get(root, "fathom");
+        return typeof vendorEvent === "function" && Reflect.get(fathom, "trackEvent") === vendorEvent;
+      } catch { return false; }
+    };
     let state;
     const sendPageview = (pageview) => {
       try {
         if (!hasUsableFathom() || pageview === undefined ||
             pageview.completion === lastTrackedCompletion ||
             authenticState !== state) return pageview?.completion === lastTrackedCompletion;
-        const options = typeof pageview.referrer === "string"
+        const options = typeof pageview.referrer === "string" && pageview.referrer.length > 0
           ? { referrer: pageview.referrer }
           : undefined;
         Reflect.apply(vendorPageview, vendorFathom, options === undefined ? [] : [options]);
@@ -700,8 +712,9 @@ export function createFathomBootstrapScript(
       if (authenticState !== state) return;
       const href = readHref();
       if (typeof href !== "string") return;
-      const referrer = navigationObservationGap
-        ? ""
+      const closesObservationGap = navigationObservationGap;
+      const referrer = closesObservationGap
+        ? undefined
         : typeof completedNavigationUrl === "string"
           ? completedNavigationUrl
           : (() => {
@@ -711,14 +724,22 @@ export function createFathomBootstrapScript(
               } catch { return ""; }
             })();
       navigationObservationGap = false;
+      navigationInFlight = false;
       completedNavigationUrl = href;
       completedNavigationReferrer = referrer;
       completedNavigationCompletion = ++completionCounter;
       const pageview = Object.freeze({ completion: completedNavigationCompletion, referrer, url: href });
+      if (closesObservationGap) {
+        pendingPageview = undefined;
+        return;
+      }
       if (vendorReady && !isPrerendering()) {
         pendingPageview = pageview;
         if (sendPageview(pageview)) pendingPageview = undefined;
       } else pendingPageview = pageview;
+    };
+    const beforeNavigationListener = config.pageviews === "none" ? undefined : () => {
+      navigationInFlight = true;
     };
     let previousLastTrackedCompletion;
     try {
@@ -752,11 +773,11 @@ export function createFathomBootstrapScript(
       return;
     }
     authenticState = state;
-    installEventClient(lifecycle, false, state, hasUsableFathom, () => eventsEnabled);
+    installEventClient(lifecycle, false, state, hasUsableFathomEvents, () => eventsEnabled);
     const flushReadyPageviews = () => {
       if (lifecycle.active !== true || isPrerendering()) return;
       if (authenticState !== state) return;
-      if (config.pageviews === "none" || navigationObservationGap) return;
+      if (config.pageviews === "none" || navigationObservationGap || navigationInFlight) return;
       const currentHref = readHref();
       const pending = pendingPageview;
       if (pending !== undefined) {
@@ -768,11 +789,24 @@ export function createFathomBootstrapScript(
       if (authenticState !== state) return;
       lifecycleActive = false;
       pendingPageview = undefined;
+      navigationObservationGap = true;
+      navigationInFlight = false;
+      completedNavigationCompletion = undefined;
+      completedNavigationReferrer = undefined;
+      completedNavigationUrl = undefined;
       if (typeof pageLoadListener === "function") {
         try {
           const removeEventListener = Reflect.get(documentValue, "removeEventListener");
           if (typeof removeEventListener === "function") {
             Reflect.apply(removeEventListener, documentValue, ["astro:page-load", pageLoadListener]);
+          }
+        } catch {}
+      }
+      if (typeof beforeNavigationListener === "function") {
+        try {
+          const removeEventListener = Reflect.get(documentValue, "removeEventListener");
+          if (typeof removeEventListener === "function") {
+            Reflect.apply(removeEventListener, documentValue, ["astro:before-preparation", beforeNavigationListener]);
           }
         } catch {}
       }
@@ -786,6 +820,9 @@ export function createFathomBootstrapScript(
       try {
         const addEventListener = Reflect.get(documentValue, "addEventListener");
         if (typeof addEventListener !== "function") throw new TypeError("Astro page-load observer unavailable");
+        if (typeof beforeNavigationListener === "function") {
+          Reflect.apply(addEventListener, documentValue, ["astro:before-preparation", beforeNavigationListener]);
+        }
         Reflect.apply(addEventListener, documentValue, ["astro:page-load", pageLoadListener]);
       } catch {
         navigationObservationGap = true;
@@ -856,13 +893,24 @@ export function createFathomBootstrapScript(
       }
       flushReadyPageviews();
     };
-    Reflect.apply(Reflect.get(script, "addEventListener"), script, ["load", activateRuntime, { once: true }]);
-    Reflect.apply(Reflect.get(script, "addEventListener"), script, ["error", () => {
+    try {
+      const addScriptListener = Reflect.get(script, "addEventListener");
+      if (typeof addScriptListener !== "function") throw new TypeError("Fathom script listener unavailable");
+      Reflect.apply(addScriptListener, script, ["load", activateRuntime, { once: true }]);
+      Reflect.apply(addScriptListener, script, ["error", () => {
+        failRuntime();
+      }, { once: true }]);
+      const head = Reflect.get(documentValue, "head");
+      if ((typeof head !== "object" && typeof head !== "function") || head === null) {
+        throw new TypeError("Document head unavailable");
+      }
+      const appendChild = Reflect.get(head, "appendChild");
+      if (typeof appendChild !== "function") throw new TypeError("Document append unavailable");
+      Reflect.apply(appendChild, head, [script]);
+    } catch {
       failRuntime();
-    }, { once: true }]);
-    const head = Reflect.get(documentValue, "head");
-    if ((typeof head !== "object" && typeof head !== "function") || head === null) return;
-    Reflect.apply(Reflect.get(head, "appendChild"), head, [script]);
+      return;
+    }
     };
     const coordinator = Object.freeze({ run, runtimeToken: config.runtimeToken });
     let coordinatorPublished = false;
@@ -1178,6 +1226,9 @@ export function createPlausibleBootstrapScript(
           activeConfig = undefined;
           vendorReady = false;
           pendingPageview = undefined;
+          navigationObservationGap = true;
+          completedNavigationReferrer = undefined;
+          completedNavigationUrl = undefined;
           if (typeof pageLoadListener === "function") {
             try {
               const remove = Reflect.get(documentValue, "removeEventListener");
@@ -1544,6 +1595,10 @@ export function createGoogleAnalyticsBootstrapScript(
         activeGeneration = undefined;
         vendorReady = false;
         pendingPageview = undefined;
+        navigationObservationGap = true;
+        completedNavigationReferrer = undefined;
+        completedNavigationTitle = undefined;
+        completedNavigationUrl = undefined;
         if (typeof localPageLoadListener === "function") {
           try {
             const remove = Reflect.get(documentValue, "removeEventListener");

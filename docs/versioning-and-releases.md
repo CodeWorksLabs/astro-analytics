@@ -14,19 +14,23 @@ consumer qualification on September 13, 2026: Astro 7.3.2 and Starlight 0.42.0
 with Astro 7.3.2, both on Node.js 22.22.2.
 Starlight 0.41.11 with Astro 7.3.2 was qualified for alpha.3 on September 11,
 2026; it remains peer-eligible, but that historical result is not current
-alpha.12 execution evidence. Other versions admitted by the bounded peer ranges
+alpha.13 execution evidence. Other versions admitted by the bounded peer ranges
 are not yet compatibility claims.
 
 ## Current line
 
-The current Milestone 2 candidate is `0.1.0-alpha.12`:
+The current Milestone 2 candidate is `0.1.0-alpha.13`:
 
 - `0.1.0` identifies the first pre-stable feature line.
 - `alpha` states that the package is incomplete and not production-ready.
+- `.13` identifies the correction for exact Fathom vendor/method provenance,
+  failure-gap invalidation, same-URL in-flight protection, empty-referrer
+  handling, partial setup cleanup, and reproducible package/CI controls.
+  Exact-package consumer qualification and replacement review are pending.
 - `.12` identifies the doctrine-complete F1 correction: lifecycle fallback and
   `none`-mode reentry, virtual referrers, exact script/global provenance,
-  non-destructive cleanup, and hardened sandbox receipt behavior. Exact-package
-  consumer qualification and replacement review are pending.
+  non-destructive cleanup, and hardened sandbox receipt behavior. Its F2 review
+  was blocking and it is superseded.
 - `.11` identifies the cross-provider correction that gives Fathom, Plausible,
   GA4, and Matomo the completion-identity behavior already established for
   Umami, and closes readiness when Astro navigation observation is unavailable.
@@ -105,7 +109,7 @@ repository-driven sandbox, browser-runtime, and provider-side live gates by
 September 13, 2026. The later doctrine-complete readiness working review found
 cross-provider completion-identity and observer-readiness defects, so those
 earlier results remain historical evidence rather than an RC disposition.
-Alpha.12 is the working correction. The line may advance to an RC only after its
+Alpha.13 is the working correction. The line may advance to an RC only after its
 exact package completes clean consumer qualification and simultaneous internal
 and external review closes without a blocking disposition.
 

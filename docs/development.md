@@ -48,6 +48,11 @@ The artifact intentionally contains Astro-native TypeScript source rather than
 compiled JavaScript. Test both Astro loading and ordinary TypeScript resolution;
 plain Node.js 22 import from `node_modules` is outside the current contract.
 
+The repository enforces LF for text files through `.gitattributes`. Exact
+candidate tarballs must be packed from a clean export of the committed tree,
+not from a platform-normalized working copy, and package members must be checked
+against the corresponding Git blobs before consumer qualification.
+
 ## Consumer qualification
 
 Before release or site integration, qualify an exact tarball in clean stock Astro

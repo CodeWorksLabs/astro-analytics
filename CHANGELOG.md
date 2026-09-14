@@ -7,6 +7,20 @@ release claim.
 
 ## Unreleased
 
+## 0.1.0-alpha.13 - Candidate
+
+- Bind Fathom readiness and event acceptance to the exact load-proven vendor
+  object and exact retained methods across matching runtime reentry.
+- Prevent Fathom, Plausible, and GA4 from replaying pageviews captured before a
+  script-failure observation gap; Fathom also waits through same-URL in-flight
+  navigation before reading live canonical and query state.
+- Avoid passing an explicit empty Fathom referrer, and fully clean partial
+  Fathom listener or append setup before a retry generation.
+- Add focused regressions for provider substitution, observation-gap replay,
+  same-URL navigation, empty-referrer behavior, and partial setup recovery.
+- Add pinned product CI and an LF repository policy so an exact committed
+  candidate can produce platform-independent package bytes.
+
 ## 0.1.0-alpha.12 - Candidate
 
 - Remove synthetic initial pageview fallback: ordinary documents establish the

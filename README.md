@@ -1,8 +1,8 @@
 # Analytics for Astro
 
 `@codeworkslabs/astro-analytics` is an experimental reusable analytics
-integration for Astro. Its source is public. The current source candidate is
-`0.1.0-alpha.12` and is not published to npm.
+integration for Astro. The current source candidate is
+`0.1.0-alpha.13` and is not published to npm.
 
 > [!IMPORTANT]
 > Milestone 2 includes real Fathom, Plausible, Google Analytics 4, Matomo, and
@@ -60,8 +60,8 @@ The package currently provides:
   component overrides.
 
 `events: false` and an omitted `events` option install no package event global,
-but enabled Fathom, Plausible, immediate-consent GA4, and immediate-consent
-Matomo, and Umami providers still load for pageview analytics.
+but enabled Fathom, Plausible, immediate-consent GA4, immediate-consent
+Matomo, and immediate-consent Umami providers still load for pageview analytics.
 `events: true` installs a frozen, package-owned client. Each configured provider
 returns its own result. Fathom returns `adapter-not-loaded` until its verified
 browser API is ready, then dispatches through `fathom.trackEvent()` without

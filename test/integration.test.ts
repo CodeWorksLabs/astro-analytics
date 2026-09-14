@@ -1958,7 +1958,10 @@ test("Fathom waits for an observed completion after page-load observer recovery"
 
   context.location.href = "https://example.test/observed/";
   harness.documentListeners.get("astro:page-load")?.[0]?.();
-  assert.deepEqual(calls, ["https://example.test/observed/"]);
+  assert.deepEqual(calls, []);
+  context.location.href = "https://example.test/observed-next/";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.deepEqual(calls, ["https://example.test/observed-next/"]);
 });
 
 test("Plausible fails closed without a page-load observer and recovers on an observed completion", () => {
@@ -2377,6 +2380,8 @@ test("Plausible runtime reentry deduplicates and script failure revokes owned st
   assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
     plausible: "ready",
   });
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), []);
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
     ["pageview", { url: "https://example.test/" }],
   ]);
@@ -2429,6 +2434,8 @@ test("Plausible retries after a nonconforming script replacement without deletin
   assert.deepEqual(JSON.parse(JSON.stringify(context.astroAnalytics.status())), {
     plausible: "ready",
   });
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), []);
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
     ["pageview", { url: "https://example.test/" }],
   ]);
@@ -2807,7 +2814,12 @@ test("temporary inspection-state replacement cannot consume terminal script outc
 
     assert.equal(first.isConnected, false);
     assert.equal(replacement.isConnected, true);
-    assert.deepEqual(pageviewCalls, ["https://example.test/retry"]);
+    assert.deepEqual(pageviewCalls, []);
+    for (const listener of harness.documentListeners.get("astro:page-load") ?? []) listener();
+    assert.deepEqual(pageviewCalls, []);
+    context.location.href = "https://example.test/retry-next";
+    for (const listener of harness.documentListeners.get("astro:page-load") ?? []) listener();
+    assert.deepEqual(pageviewCalls, ["https://example.test/retry-next"]);
   }
 });
 
@@ -3211,11 +3223,14 @@ test("a superseded pending script cannot send after its replacement becomes curr
 
   secondLoad?.();
   firstLoad?.();
-  assert.deepEqual(calls, ["https://example.test/"]);
+  assert.deepEqual(calls, []);
 
   context.location.href = "https://example.test/next";
   for (const listener of harness.documentListeners.get("astro:page-load") ?? []) listener();
-  assert.deepEqual(calls, ["https://example.test/", "https://example.test/next"]);
+  assert.deepEqual(calls, []);
+  context.location.href = "https://example.test/after-gap";
+  for (const listener of harness.documentListeners.get("astro:page-load") ?? []) listener();
+  assert.deepEqual(calls, ["https://example.test/after-gap"]);
 });
 
 test("Fathom retries after a failed script and reuses a valid live script", () => {
@@ -3266,7 +3281,12 @@ test("a loaded script without the Fathom pageview API fails and can retry", () =
   executeFathomBootstrap(context);
   const second = harness.appended[1] ?? {};
   activateFathom(context, second, { trackPageview() { calls.push(context.location.href); } });
-  assert.deepEqual(calls, ["https://example.test/"]);
+  assert.deepEqual(calls, []);
+  for (const listener of harness.documentListeners.get("astro:page-load") ?? []) listener();
+  assert.deepEqual(calls, []);
+  context.location.href = "https://example.test/after-gap";
+  for (const listener of harness.documentListeners.get("astro:page-load") ?? []) listener();
+  assert.deepEqual(calls, ["https://example.test/after-gap"]);
 });
 
 test("provider pageviews wait for Astro's post-swap page-load event", () => {
@@ -3878,6 +3898,198 @@ test("pageview none remains event-only across matching runtime reentry", () => {
     const commands = (context.dataLayer as Array<ArrayLike<unknown>>).map(serializeGtagCommand);
     assert.equal(commands.some((command) => command[0] === "event" && command[1] === "page_view"), false);
     assert.equal(context.astroAnalytics.track("event_only").ok, true);
+  }
+});
+
+test("Fathom readiness remains bound to the exact vendor and event method", () => {
+  const harness = createDocumentHarness();
+  const eventCalls: string[] = [];
+  const originalTrackEvent = (name: string) => { eventCalls.push(name); };
+  const originalVendor = {
+    trackEvent: originalTrackEvent,
+    trackPageview() {},
+  };
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/" },
+  };
+
+  executeFathomBootstrap(context, { pageviews: "none" });
+  activateFathom(context, harness.appended[0] ?? {}, originalVendor);
+  assert.equal(context.astroAnalytics.track("original").ok, true);
+
+  context.fathom = { trackEvent() {}, trackPageview() {} };
+  executeFathomBootstrap(context, { pageviews: "none" });
+  assert.equal(context.astroAnalytics.status().fathom, "adapter-not-loaded");
+  assert.equal(context.astroAnalytics.track("foreign-vendor").reason, "adapter-not-loaded");
+
+  context.fathom = originalVendor;
+  assert.equal(context.astroAnalytics.status().fathom, "ready");
+  originalVendor.trackEvent = () => {};
+  assert.equal(context.astroAnalytics.status().fathom, "adapter-not-loaded");
+  assert.equal(context.astroAnalytics.track("foreign-method").reason, "adapter-not-loaded");
+
+  originalVendor.trackEvent = originalTrackEvent;
+  assert.equal(context.astroAnalytics.track("restored").ok, true);
+  assert.deepEqual(eventCalls, ["original", "restored"]);
+});
+
+test("Fathom never consumes a completed route while a same-URL navigation is in flight", () => {
+  const harness = createDocumentHarness();
+  const calls: Array<{ canonical: string; search: string }> = [];
+  const context: vm.Context = {
+    canonical: "https://example.test/original",
+    document: harness.document,
+    location: { href: "https://example.test/same", search: "?original=1" },
+  };
+  harness.document.querySelector = () => ({ href: context.canonical });
+  const vendor = {
+    trackEvent() {},
+    trackPageview() {
+      calls.push({ canonical: context.canonical, search: context.location.search });
+    },
+  };
+
+  executeFathomBootstrap(context);
+  activateFathom(context, harness.appended[0] ?? {}, vendor);
+  calls.length = 0;
+
+  harness.documentListeners.get("astro:before-preparation")?.[0]?.();
+  context.canonical = "https://example.test/replacement";
+  context.location.search = "?replacement=1";
+  executeFathomBootstrap(context);
+  assert.deepEqual(calls, []);
+
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.deepEqual(calls, [{
+    canonical: "https://example.test/replacement",
+    search: "?replacement=1",
+  }]);
+});
+
+test("Fathom never passes an empty explicit referrer to the official API", () => {
+  const harness = createDocumentHarness();
+  harness.document.referrer = "";
+  const calls: unknown[][] = [];
+  const context: vm.Context = {
+    document: harness.document,
+    location: { href: "https://example.test/first" },
+  };
+  executeFathomBootstrap(context);
+  activateFathom(context, harness.appended[0] ?? {}, {
+    trackEvent() {},
+    trackPageview(...args: unknown[]) { calls.push(args); },
+  });
+  assert.deepEqual(calls, [[]]);
+
+  context.location.href = "https://example.test/second";
+  harness.documentListeners.get("astro:page-load")?.[0]?.();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+    [],
+    [{ referrer: "https://example.test/first" }],
+  ]);
+});
+
+test("Fathom cleans partial script setup before a successful retry", () => {
+  for (const failure of ["script-listener", "append"] as const) {
+    const harness = createDocumentHarness();
+    const context: vm.Context = {
+      document: harness.document,
+      location: { href: `https://example.test/${failure}` },
+    };
+    const originalCreateElement = harness.document.createElement as (...args: unknown[]) => Record<string, unknown>;
+    const originalHead = harness.document.head;
+    let failedScript: Record<string, unknown> | undefined;
+
+    if (failure === "script-listener") {
+      harness.document.createElement = function (...args: unknown[]) {
+        const script = Reflect.apply(originalCreateElement, this, args);
+        failedScript = script;
+        script.addEventListener = () => { throw new Error("listener failed"); };
+        return script;
+      };
+    } else {
+      harness.document.createElement = function (...args: unknown[]) {
+        failedScript = Reflect.apply(originalCreateElement, this, args);
+        return failedScript;
+      };
+      harness.document.head = { appendChild() { throw new Error("append failed"); } };
+    }
+
+    assert.doesNotThrow(() => executeFathomBootstrap(context));
+    assert.equal(context.fathom, undefined);
+    assert.equal(failedScript?.isConnected, false);
+    assert.equal(harness.documentListeners.get("astro:page-load")?.length, 0);
+    assert.equal(harness.documentListeners.get("astro:before-preparation")?.length, 0);
+    assert.equal(context.astroAnalytics.status().fathom, "adapter-not-loaded");
+
+    harness.document.createElement = originalCreateElement;
+    harness.document.head = originalHead;
+    executeFathomBootstrap(context);
+    const retryScript = harness.appended.at(-1) ?? {};
+    activateFathom(context, retryScript, { trackEvent() {}, trackPageview() {} });
+    assert.equal(context.astroAnalytics.status().fathom, "ready");
+    assert.equal(harness.documentListeners.get("astro:page-load")?.length, 1);
+    assert.equal(harness.documentListeners.get("astro:before-preparation")?.length, 1);
+  }
+});
+
+test("failed adapters cannot replay a route completed before an observation gap", () => {
+  {
+    const harness = createDocumentHarness();
+    const calls: string[] = [];
+    const context: vm.Context = {
+      document: harness.document,
+      location: { href: "https://example.test/start" },
+    };
+    harness.document.querySelector = () => ({});
+    executeFathomBootstrap(context);
+    context.location.href = "https://example.test/pending-a";
+    harness.documentListeners.get("astro:page-load")?.[0]?.();
+    (harness.appended[0]?.listeners as Map<string, Array<() => void>>).get("error")?.[0]?.();
+    context.location.href = "https://example.test/missed-b";
+    context.location.href = "https://example.test/pending-a";
+    executeFathomBootstrap(context);
+    activateFathom(context, harness.appended[1] ?? {}, {
+      trackEvent() {},
+      trackPageview() { calls.push(context.location.href); },
+    });
+    assert.deepEqual(calls, []);
+  }
+  {
+    const harness = createDocumentHarness();
+    const context: vm.Context = {
+      document: harness.document,
+      location: { href: "https://example.test/start" },
+    };
+    harness.document.querySelector = () => ({});
+    executePlausibleBootstrap(context);
+    context.location.href = "https://example.test/pending-a";
+    harness.documentListeners.get("astro:page-load")?.[0]?.();
+    (harness.appended[0]?.listeners as Map<string, Array<() => void>>).get("error")?.[0]?.();
+    context.location.href = "https://example.test/missed-b";
+    context.location.href = "https://example.test/pending-a";
+    executePlausibleBootstrap(context);
+    const calls = activatePlausible(context, harness.appended[1] ?? {});
+    assert.deepEqual(calls, []);
+  }
+  {
+    const harness = createDocumentHarness();
+    const context: vm.Context = {
+      document: harness.document,
+      location: { href: "https://example.test/start" },
+    };
+    harness.document.querySelector = () => ({});
+    executeGoogleAnalyticsBootstrap(context);
+    context.location.href = "https://example.test/pending-a";
+    harness.documentListeners.get("astro:page-load")?.[0]?.();
+    (harness.appended[0]?.listeners as Map<string, Array<() => void>>).get("error")?.[0]?.();
+    context.location.href = "https://example.test/missed-b";
+    context.location.href = "https://example.test/pending-a";
+    executeGoogleAnalyticsBootstrap(context);
+    (harness.appended[1]?.listeners as Map<string, Array<() => void>>).get("load")?.[0]?.();
+    const commands = (context.dataLayer as Array<ArrayLike<unknown>>).map(serializeGtagCommand);
+    assert.equal(commands.some((command) => command[0] === "event" && command[1] === "page_view"), false);
   }
 });
 

@@ -28,8 +28,8 @@ clients, adapter results, or supported hostile-object cases. It validates and
 copies the event before invoking `window.astroAnalytics.track()`.
 
 Milestone 2 connects the client to Fathom's `trackEvent()`, Plausible's
-`plausible()`, Google Analytics 4's `gtag()`, and Matomo's `_paq` APIs. Calls made before an
-integration's script load is verified return `adapter-not-loaded`; they are not
+`plausible()`, Google Analytics 4's `gtag()`, Matomo's `_paq`, and Umami's
+`umami.track()` APIs. Calls made before an integration's script load is verified return `adapter-not-loaded`; they are not
 queued or retried. Unrelated preexisting vendor globals are not treated as
 package readiness.
 

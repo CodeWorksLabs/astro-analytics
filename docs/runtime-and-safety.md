@@ -112,8 +112,11 @@ Runtime state is published and read back before a new event client is exposed, s
 a failed publication cannot leave an untracked client outside later revocation.
 If the vendor script fails, or reports `load` without exposing Fathom's
 `trackPageview()` API, its generation is deactivated, pending pageviews are
-cleared, its Astro page-load listener is removed, and the script is disconnected
-before retry is permitted. Deactivation uses private closure state, so freezing
+cleared, both Astro navigation listeners are removed, and the script is disconnected
+before retry is permitted. A retry cannot replay a completion captured before
+that observation gap; its first newly observed completion re-establishes route
+history without sending a pageview. Partial listener or DOM-append setup follows
+the same cleanup path. Deactivation uses private closure state, so freezing
 the inspection-only lifecycle object cannot prevent cleanup. A pageview that
 throws synchronously remains pending for bounded matching-bootstrap retry.
 
@@ -155,7 +158,9 @@ method receiver, and normalizes the returned result to the exact public union.
 The Fathom adapter guards the initially absent `fathom` global and accepts only
 the value assigned while its exact configured script is `document.currentScript`.
 It preserves unrelated script-ID occupants and later unrelated global values,
-and every send revalidates the retained script and vendor methods. The adapter
+and every send revalidates the retained script, exact load-proven vendor object,
+and exact pageview or event method. An explicit empty referrer is never passed
+to Fathom, avoiding the vendor's truthy fallback behavior. The adapter
 invokes the vendor's synchronous `trackEvent()` boundary and
 returns success once that invocation is accepted. Delivery is controlled by
 Fathom and is not synchronously confirmed. No event is queued or persisted by
