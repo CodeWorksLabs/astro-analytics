@@ -13,7 +13,7 @@ bypassed validation, Starlight used Astro's receipt key in one timeout, and the
 current-version sentence still named alpha.16. Internal review also identified
 the omitted Analytics docs test command and stale sandbox artifact allowlists.
 
-Product content commit `5fed4cfa06cbb4cf2defbe6ad1d019d4bd3d1c3a`
+Product content commit `5fed4cf66d9fb63ecdd6be8754eb9746af3315fa`
 identifies `0.1.0-alpha.18`. It publishes one immutable, reusable location
 policy per runtime token and exact blocked-name list; all five provider
 runtimes and the public event coordinator consult it at send/readiness,
