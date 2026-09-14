@@ -2,7 +2,53 @@
 
 Updated: 2026-09-14
 
-## Active alpha.18 correction after F7 review — 2026-09-14
+## Active alpha.19 correction after F8 review — 2026-09-14
+
+The complete external F8 review blocked alpha.18 with four P1 and two P2
+findings: a blocked query identity could return through the initial document
+referrer; Matomo retained stale context on the first clean recovery; runtimes
+started by the first clean ClientRouter dispatch missed that completion; both
+consumer workflows retained the alpha.17 source pin; expiry-cleanup faults left
+false Continuing feedback; and this active checkpoint retained superseded
+pre-migration state. Internal F8 independently confirmed the workflow blocker
+and found no additional defect.
+
+Product content commit `b7f81f7da106229dfa9112b8851788b69f46b88e`
+identifies `0.1.0-alpha.19`. Its shared immutable privacy policy screens both
+current and arbitrary context URLs. A blocked-initial listener marks its
+triggering clean completion while the five runtimes synchronously install, so
+they establish a non-emitting clean baseline without reusing the blocked
+document referrer. Matomo establishes recovered URL/title/blank-referrer vendor
+context before accepting an immediate event. The new emitted-runtime regression
+covers all five providers and all three pageview modes with snapshot event
+dispatch and provider payload/context inspection. Strict typecheck and 161/161
+tests pass.
+
+Two independent clean Git-export packs are byte-identical. The 19-member
+alpha.19 archive is 53,490 bytes, SHA-256
+`0ab90794159670cabbed0c7e974a722cd8254434d83f95b15286dd4366abaffa`,
+SHA-1 `a1ffab524215bfa758b04a721d5d3f6ed06ce1d4`, and integrity
+`sha512-jYe427D1KgFMX6xj9yCeTCexJ+HI+nUbXQbv16RspSHLvh75WnmLZN0BwGC6SzbVM38kD5wLTFRUh/+Wm/vi3w==`.
+All 19 extracted members match the content-commit export.
+
+Both consumer functional commits bind that exact archive and content commit;
+their committed workflow source pins now agree and wrong-source negative
+controls still reject. Both 8/8 suites, audits, checks, builds, and Wrangler
+dry-runs pass. Expiry cleanup exceptions now retain the locked state while
+truthfully reporting that navigation and cleanup failed. Docs functional commit
+`4787b301d5455618d89423ff242db83988cb572a` contains the exact generated
+ten-page alpha.19 snapshot. Its 9 Analytics assertions, 26 Brand Navigation
+assertions, offline verification, audit, check, 33-page build, and 130-asset
+dry-run pass. Accepted Brand Navigation boundary
+`e215ec8f8c7048c69cf8f7d1bfc1914f68220967` remains unchanged.
+
+Next: commit all four refreshed checkpoints, run every final gate from fresh
+exact Git exports with explicit working-directory assertions, push only the
+product final commit, then launch simultaneous doctrine-complete F9 reviews.
+Do not push or deploy the sandbox/docs repositories, publish npm, tag, or create
+a release before review and Phil's decision.
+
+## Historical alpha.18 correction after F7 review — 2026-09-14
 
 The complete external F7 review blocked alpha.17 with two P1, two P2, and one
 P3 finding. A blocked query parameter was enforced only at initial bootstrap,
