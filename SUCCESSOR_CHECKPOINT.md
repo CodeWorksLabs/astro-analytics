@@ -14,11 +14,20 @@ records. The external F5 turn ended after only a partial doctrine read and did
 not issue a substantive disposition. No F5 PASS exists.
 
 The reviewer's eleven exact untracked generated-doc files were removed after
-their origin and paths were verified; no tracked product byte had changed. The
-working product is now `0.1.0-alpha.16`. Its runtime remains byte-identical to
-alpha.14. The new immutable candidate version records corrected shipped status
-and will be packed from a clean Git export, with every package member verified
-against the corresponding Git blob before either sandbox is rebound.
+their origin and paths were verified; no tracked product byte had changed.
+Product package-content commit
+`f5e1ea74564c4e2831c97c3b2d3a5aaeef28688c`, tree
+`210268647e90f777d3daab84cf6e129633bab743`, is on the product repository's
+own `main` and synchronized to its upstream. The working product is
+`0.1.0-alpha.16`; its runtime remains byte-identical to alpha.14. Strict
+TypeScript, all 157 tests, and the production audit passed before commit.
+
+The canonical alpha.16 archive was packed twice from a clean Git export with
+identical bytes. It is 49,918 bytes with 19 members, SHA-256
+`43ea6ce82bfb92cd92ff532491dffc941f34101ad78d6946a75aa9b5a7520fb1`,
+SHA-1 `40a6105e8288e2e19237455f75fd741d2f458d29`, and npm integrity
+`sha512-ZTuCi7BO7ONPXSYqSeoFjhevfEJ9lBOggr4f5dz71evk5h6qLh7HrVcXneVGf/HHZcrU9/C89RORRuWr9BLcyg==`.
+All 19 extracted members are byte-identical to their clean-export source.
 
 The grouped consumer correction replaces the fragile destination-head prelude
 with an analytics-free handoff boundary, binds each workflow to one mechanically
@@ -30,10 +39,17 @@ repository's own `main` deploys its site.
 Accepted Brand Navigation commit `e215ec8` remains the supplied boundary. Its
 pipeline and content are not part of this correction and must not be reopened.
 
-Next: complete the alpha.16 grouped correction, run exact clean-export package,
-consumer, docs, and Wrangler dry-run gates, refresh all four checkpoints,
-commit and push the product repository's own `main`, keep sandbox/docs commits
-local, and launch a fresh identical simultaneous internal/external review. No
+Both consumer functional commits and the generated-docs commit now exist
+locally, with clean-archive gates passing before their final checkpoint-only
+commits. One earlier Astro command created a disposable archive but mistakenly
+ran in the canonical repository; it changed only ignored `node_modules` and
+`dist` state and was disqualified. The corrected command explicitly entered
+the archive and passed.
+
+Next: commit and push this checkpoint, verify its hosted product CI, commit the
+three repository checkpoints locally, replay the exact Astro archive after its
+test-oracle-only amendment, freeze all four identities, and launch fresh
+identical simultaneous internal/external F6 review. No
 npm publication, tag, GitHub Release, sandbox/docs push, deployment, or provider
 action is authorized.
 
