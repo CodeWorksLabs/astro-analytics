@@ -2,66 +2,62 @@
 
 Updated: 2026-09-14
 
-## Active alpha.14 correction after F3 review — 2026-09-14
+## Active alpha.15 correction after F4 review — 2026-09-14
 
-Exact alpha.13 product freeze `561f1a2f2e59a310a4516572a0457e9aa609eb89`
-passed its product runtime, package, artifact, audit, and hosted-CI gates. The
-external doctrine-complete F3 review blocked the complete family because both
-sandbox journey implementations could commit an abandoned attempt during a
-later unrelated `pagehide`, report success before durable one-time consumption,
-and accept repeat activation while visibly locked. The internal review was
-interrupted by a Phil-directed hold for the shared Brand Navigation docs
-pipeline, but independently confirmed those sandbox defects and additionally
-found the broken global-npm bootstrap in both sandbox workflows and a GA4
-reserved-key serialization defect. It therefore did not issue a final F3
-disposition.
+Simultaneous doctrine-complete F4 reviews agreed that the alpha.14 product
+runtime, tests, canonical artifact, dependency, CI, and offline documentation
+pipeline gates were nonblocking. They blocked the complete family because both
+sandbox destinations accepted malformed or contradictory provider-result
+envelopes. The external review also classified unverified storage/history
+postconditions as P1. The internal review found that the URL nonce could reach
+provider pageviews before body-end cleanup and that the Analytics docs verifier
+accepted extra unmanifested pages. Both identified stale operative records.
 
-New Bridge Boss and Brand Navigation supervised the separate shared docs-site
-pipeline correction. The accepted local docs commit is `e215ec8`; ordinary
-builds now verify committed Brand Navigation inputs offline. Analytics must not
-modify that pipeline. The docs site remains unpushed because the preserved
-Analytics snapshot falsely calls the public product repository private.
+The working product is now `0.1.0-alpha.15`. Its runtime is byte-identical to
+alpha.14; the new immutable version is required because corrected shipped
+versioning and review-status documentation changes package bytes. Product
+content commit `6cd0ea17fda505abfe4b19a22f380fea9b5d48da`, tree
+`1f19c33d8a5923b5ab7e020497e074ec1e5e8693`, passed strict TypeScript,
+157 tests, a zero-vulnerability production audit, the 19-member package gate,
+and hosted GitHub Actions run `34831525341`.
 
-The working product is now `0.1.0-alpha.14`. Runtime bootstrap options are
-revived from escaped JSON data so normalized GA4 configuration preserves own
-reserved names such as `__proto__`, and inline script terminators cannot escape
-configuration. The product documentation now states the repository's actual
-public visibility. Both sandbox journeys use a destination URL nonce correlated
-with the same-tab receipt; the destination strips the nonce and consumes the
-receipt before showing success. The old pagehide commit mechanism is removed,
-locked activation is enforced in the handler, and both workflows use Corepack
-to activate npm 11.12.1.
+The canonical alpha.15 archive is 50,940 bytes with SHA-256
+`a0d7d221e267c4e7cb422785def2e298df4c2256a4644efd5d3aa2261d843a6f`,
+SHA-1 `f54b3f54d2bac33493da4a40c8504228c76e0e79`, and npm integrity
+`sha512-UD/A4kP3J+xX8FOPTGQ4Vlru6eEgsQqfAFbEz2tMvpShpzszKZt82Xi6Lj0dEydeA8RjrkUzNA5BEGt71TVRBQ==`.
+Both sandboxes bind those exact bytes. Their destination validator now requires
+the exact configured-provider set, exact success/failure shapes, allowed
+failure reasons, coherent aggregate result, and successful selected provider.
+Source persistence, recovery cleanup, and destination URL/storage consumption
+verify observable postconditions before navigation, unlock, or success. A
+blocking destination-head prelude strips the nonce before the Analytics runtime
+module captures the pageview; both exact builds prove that script ordering.
 
-Freeze `AFA-RC-READINESS-20260914-F4` is ready for simultaneous replacement
-review. The package-content commit is
-`dcbec9fbce94c8148de627885f3279ccd50b0f34`, tree
-`fa84f761bbbb9d5b8dab5674f535454dcc090b45`; hosted GitHub Actions run
-`34823535614` passed every step for that exact commit. The canonical artifact is
-49,454 bytes, has SHA-256
-`ae5f21d040e3b02f455234c4096da0be6031f0764e75685cf62621c1fe63a7bd`,
-SHA-1 `47c01270f713c20fe0331f49e055a7e1eadf6718`, npm integrity
-`sha512-Y/5DjhxyuVCUEfMZG4ENSpE4bZ5Ox43IfpKLJAqRcWhvQhm9nNo8aUVRzEJrnbQILKo3dr5OOAYpDw72WD6qSg==`,
-and 19 members with zero Git-tree mismatches.
+Functional consumer commits are Astro
+`c6c7b02296ba147947d9e670bd573771123c9bcc`, tree
+`ff9a41df211395d6a79df29a40e9354642a4d620`, and Starlight
+`9aacc00cb69124ce5c79419c039e93dd0f8cc288`, tree
+`9f33b79746a799e258204fdb9dafd6ab1048ac96`. Each exact clean archive passed
+clean install, zero production audit, eight focused tests, zero Astro
+diagnostics, production build, emitted prelude-before-runtime ordering, and
+Wrangler dry-run without deployment.
 
-The exact local-only consumers are Astro commit
-`5a74489494e6e112b3891faf854e743b6e9c7de9`, tree
-`91073618bf47d25ca6fb52c812e30b2d6016b352`; Starlight commit
-`c1582b7bd8599ff8dbe0f322152a16d0027b41ef`, tree
-`f8ae6c0fbeff069aaa74252cf27ef189b29d78d9`; and docs commit
-`fba159345898f2e7ad94643883ad66309a5b64f9`, tree
-`d48291650140ead525701373e904f4caa2e3aaa0`. Each repository is clean. Both
-sandbox exact-archive gates passed clean install, zero production audit,
-five receipt/UI tests, zero Astro diagnostics, build, and Wrangler dry-run. The
-docs exact-archive gate passed clean install, ten-page Analytics verification,
-26 Brand Navigation pipeline tests, offline nine-page verification, zero Astro
-diagnostics, 33-page build, zero production audit, Wrangler dry-run, and an
-unchanged candidate-file ledger.
+Docs functional commit `8ba0bd7e0d7cab46f8e476b257eb6ff651d2d188`, tree
+`9d35a4273a018bc8a1ba8ed06620c6ad7bcda4e5`, synchronizes the ten alpha.15
+pages, corrects public-repository and current-state wording, and requires exact
+directory/manifest equality. Nine new Analytics verifier assertions cover
+read-only verification plus extra, missing, tampered, reordered, mismatched,
+and malformed inputs. Its exact clean archive passed those tests, all 26
+accepted Brand Navigation pipeline tests, offline verification, zero Astro
+diagnostics, the 33-page build, zero production audit, and Wrangler dry-run.
+Accepted Brand Navigation commit `e215ec8` and its pipeline were not modified.
 
-Next: commit and push this checkpoint-only product update, verify its hosted CI,
-then launch the same doctrine-complete mandate simultaneously with a fresh
-internal reviewer and the external Code Reviewer. No sandbox or docs push,
-deployment, npm publication, tag, GitHub Release, or provider action is
-authorized before non-blocking replacement review and Phil's next decision.
+Next: commit this checkpoint and the three repository checkpoints, verify the
+product checkpoint-only hosted run, freeze exact final identities, and launch
+the identical doctrine-complete F5 mandate simultaneously with a fresh internal
+reviewer and the external Code Reviewer. Do not push either sandbox or the docs
+repository, because each repository's own `main` deploys its site. No npm
+publication, tag, GitHub Release, deployment, or provider action is authorized.
 
 ## Historical doctrine-complete alpha.13 correction — 2026-09-13
 
