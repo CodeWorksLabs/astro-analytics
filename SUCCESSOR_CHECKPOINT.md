@@ -2,7 +2,48 @@
 
 Updated: 2026-09-13
 
-## Active doctrine-complete alpha.12 correction — 2026-09-13
+## Active doctrine-complete alpha.13 correction — 2026-09-13
+
+The simultaneous F2 review of exact alpha.12 commit
+`da6843ab0be4babc3886ddd5e48b0addd0325d4e` was blocking. Both reviews found
+that Fathom reentry could accept substituted vendor state and that Fathom,
+Plausible, and GA4 failure cleanup retained enough completion history to replay
+a page captured before an observation gap. Additional findings covered Fathom's
+empty-referrer fallback, same-URL in-flight live-state capture, partial setup
+cleanup, sandbox feedback and receipt identity, repository CI, documentation
+truth, and platform-dependent package bytes.
+
+The working product is now `0.1.0-alpha.13`. It binds Fathom readiness to the
+exact load-proven vendor object and methods, invalidates stale completion state
+across Fathom/Plausible/GA4 failure gaps, waits through Fathom's
+`astro:before-preparation`/`astro:page-load` boundary even when the URL is
+unchanged, never supplies an explicit empty Fathom referrer, and cleans partial
+Fathom listener/append setup before retry. Five focused regressions raise the
+suite to 156 tests. Pinned product CI and an LF `.gitattributes` policy have
+been added. The latest local product gate passed strict TypeScript, 156/156
+tests, a zero-vulnerability production audit, diff checks, and the expected
+19-member dry-run package surface.
+
+The runtime, tests, package version, documentation, LF policy, and pinned CI
+were committed and pushed to the product repository's own `main` as
+`023835d35055bd3b7f7f380d3372cffbc301e29f`. A follow-up checkpoint commit
+removes the two blank EOF lines reported during that commit and records this
+handoff state. Next: pack a canonical tarball from a clean export of the final
+checkpoint commit, prove member bytes against Git blobs, then bind that artifact
+into both sandboxes. Correct the two
+sandbox journey UIs and verification workflows, synchronize and correct the
+documentation repository, run all local consumer gates, commit sandbox/docs
+work locally without pushing it, and record the next exact multi-repository
+freeze. Pushes to either sandbox repository's own `main` or the documentation
+repository's own `main` trigger Cloudflare deployment and remain prohibited.
+Do not deploy, publish to npm, create or move a tag, or create a GitHub Release.
+
+After that freeze, launch the same doctrine mandate simultaneously with an
+internal reviewer and the external Code Reviewer task. Iterate corrections,
+commits, and product pushes until both reviews return a non-blocking
+disposition.
+
+## Historical doctrine-complete alpha.12 correction — 2026-09-13
 
 The alpha.11 freeze received simultaneous internal and external
 doctrine-complete review under `AFA-RC-READINESS-20260913-F1`. Both reviewers

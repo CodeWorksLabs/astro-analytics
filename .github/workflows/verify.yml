@@ -32,4 +32,3 @@ jobs:
         run: npm pack --dry-run
       - name: Require a reproducible checkout
         run: git diff --exit-code
-
