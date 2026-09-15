@@ -5,19 +5,18 @@ strictly checked at runtime: unknown fields, symbol keys, malformed values, and
 non-record objects are rejected with `TypeError`.
 
 Fathom, Plausible, Google Analytics 4, Matomo, and Umami settings drive implemented
-Milestone 2 adapters.
+current adapters.
 
 ## Root configuration
 
 | Field | Type | Default | Current behavior |
 | --- | --- | --- | --- |
 | `providers` | `false` or non-empty provider array | Required | `false` disables the integration; an array enables one or more independently reported providers |
-| `provider` | `false` or provider object | Deprecated | Compatibility input for one provider; cannot be combined with `providers` |
 | `enabled` | `boolean` | `true` | Master integration switch |
 | `environments` | object | Production only | Selects Astro config-setup commands that may inject analytics |
-| `events` | `boolean` or deprecated options object | `false` | `true` installs the package event client; the legacy object form is accepted as enabled compatibility input |
+| `events` | `boolean` | `false` | `true` installs the package event client |
 | `blockedQueryParameters` | unique parameter-name array | `[]` | Suppresses the complete runtime on matching routes and screens provider-bound referrer context |
-| `debug` | `boolean` | `false` | Reserved normalized setting; Milestone 2 emits no debug output |
+| `debug` | `boolean` | `false` | Reserved normalized setting; the current runtime emits no debug output |
 
 Only the listed keys are accepted.
 
@@ -170,7 +169,7 @@ analytics({
 `https://cdn.usefathom.com/script.js`. `honorDnt` and `canonical` must be boolean.
 Consent, when present, contains only `mode`. Omit consent or use `immediate` to
 load Fathom. `deferred` and `external` fail closed: the vendor is not loaded and
-event calls return `consent-pending` because this candidate has no activation API.
+event calls return `consent-pending` because the package has no activation API.
 Consent mode is fixed before the first Fathom load attempt. A conflicting later
 bootstrap cannot retroactively cancel an already prepared vendor script and is
 therefore ignored; no runtime consent-transition API is provided.
@@ -250,7 +249,7 @@ referrer. Later observed navigation restores ordinary virtual-referrer edges.
 
 Immediate consent loads Matomo. Deferred and external modes fail closed without
 creating `_paq` or loading the tracker and report `consent-pending`; runtime
-consent activation is not yet part of this milestone.
+consent activation is not part of the current contract.
 
 ## Umami
 
@@ -293,7 +292,7 @@ observed completion is sent even when its URL matches the preceding completion.
 Before readiness, completed routes coalesce to the latest confirmed route and
 superseded history is not replayed.
 
-`data-auto-pageview` was introduced by Umami 3.2.0, so alpha.10 and later require an
+`data-auto-pageview` was introduced by Umami 3.2.0, so the Umami adapter requires an
 Umami 3.2-or-later tracker. Earlier self-hosted trackers are not supported
 because they cannot provide the package's duplicate-pageview guarantee.
 
@@ -312,4 +311,4 @@ pageviews. Umami-specific validation
 limits names to 50 characters, data to 50 properties, strings to 500 characters,
 and numbers to four decimal places. The shared package's stricter primitive-only
 event shape remains in force, so nested Umami event objects and arrays are not
-accepted in alpha.10 or later.
+accepted by the current adapter.

@@ -12,3076 +12,487 @@ export interface AnalyticsRuntimeOptions {
   runtimeToken: string;
 }
 
-export interface FathomRuntimeOptions {
-  canonical?: boolean | undefined;
+interface BaseRuntimeOptions {
   consentMode?: "immediate" | "deferred" | "external" | undefined;
   events: boolean;
-  honorDnt?: boolean | undefined;
   locationPolicyRequired?: boolean;
   pageviews: "provider" | "astro" | "none";
   runtimeToken: string;
   scriptSrc: string;
+}
+
+export interface FathomRuntimeOptions extends BaseRuntimeOptions {
+  canonical?: boolean | undefined;
+  honorDnt?: boolean | undefined;
   siteId: string;
 }
 
-export interface PlausibleRuntimeOptions {
+export interface PlausibleRuntimeOptions extends BaseRuntimeOptions {
   captureOnLocalhost?: boolean | undefined;
-  consentMode?: "immediate" | "deferred" | "external" | undefined;
   endpoint?: string | undefined;
-  events: boolean;
-  locationPolicyRequired?: boolean;
-  pageviews: "provider" | "astro" | "none";
-  runtimeToken: string;
-  scriptSrc: string;
 }
 
-export interface GoogleAnalyticsRuntimeOptions {
+export interface GoogleAnalyticsRuntimeOptions extends BaseRuntimeOptions {
   config?: Readonly<Record<string, string | number | boolean>> | undefined;
   consentInitial?: Readonly<{
     analyticsStorage: "granted" | "denied";
-    adStorage?: "granted" | "denied" | undefined;
-    adUserData?: "granted" | "denied" | undefined;
-    adPersonalization?: "granted" | "denied" | undefined;
+    adStorage?: "granted" | "denied";
+    adUserData?: "granted" | "denied";
+    adPersonalization?: "granted" | "denied";
   }> | undefined;
   consentMode: "immediate" | "deferred" | "external";
-  events: boolean;
-  locationPolicyRequired?: boolean;
   measurementId: string;
-  pageviews: "provider" | "astro" | "none";
-  runtimeToken: string;
-  scriptSrc: string;
 }
 
-export interface MatomoRuntimeOptions {
-  consentMode?: "immediate" | "deferred" | "external" | undefined;
+export interface MatomoRuntimeOptions extends BaseRuntimeOptions {
   eventCategory: string;
-  events: boolean;
-  locationPolicyRequired?: boolean;
-  pageviews: "provider" | "astro" | "none";
-  runtimeToken: string;
-  scriptSrc: string;
   siteId: string;
   trackerUrl: string;
 }
 
-export interface UmamiRuntimeOptions {
-  consentMode?: "immediate" | "deferred" | "external" | undefined;
-  events: boolean;
+export interface UmamiRuntimeOptions extends BaseRuntimeOptions {
   hostUrl?: string | undefined;
-  locationPolicyRequired?: boolean;
-  pageviews: "provider" | "astro" | "none";
-  runtimeToken: string;
-  scriptSrc: string;
   websiteId: string;
 }
 
-function serializeRuntimeOptions(options: unknown): string {
-  const json = JSON.stringify(options);
+function serialize(value: unknown): string {
+  const json = JSON.stringify(value);
   return `JSON.parse(${JSON.stringify(json)
     .replace(/</g, "\\u003c")
     .replace(/\u2028/g, "\\u2028")
     .replace(/\u2029/g, "\\u2029")})`;
 }
 
-export function createBootstrapScript(
-  options: AnalyticsRuntimeOptions = {
-    events: true,
-    providers: ["fathom"],
-    runtimeToken: "test-runtime-token",
-  },
-): string {
-  const serializedOptions = serializeRuntimeOptions(options);
-  return `(() => {
-  "use strict";
-  const config = ${serializedOptions};
-  const brand = ${JSON.stringify(RUNTIME_CLIENT_BRAND)};
+// Serialized into the page; keep this function self-contained.
+function browserClientRuntime(config: any, brand: string): void {
   try {
-    const root = globalThis;
-    const symbolValue = Reflect.get(root, "Symbol");
-    if ((typeof symbolValue !== "object" && typeof symbolValue !== "function") || symbolValue === null) return;
-    const symbolFor = Reflect.get(symbolValue, "for");
-    if (typeof symbolFor !== "function") return;
-    const coordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:client-coordinator:v2"]);
-    if (typeof coordinatorKey !== "symbol") return;
-    try {
-      const existingCoordinator = Reflect.get(root, coordinatorKey);
-      if ((typeof existingCoordinator === "object" || typeof existingCoordinator === "function") && existingCoordinator !== null &&
-          Reflect.get(existingCoordinator, "runtimeToken") === config.runtimeToken) {
-        const existingKeys = Reflect.ownKeys(existingCoordinator);
-        const existingRun = Reflect.get(existingCoordinator, "run");
-        if (existingKeys.length === 3 && ["register", "run", "runtimeToken"].every((key) => existingKeys.includes(key)) &&
-            typeof Reflect.get(existingCoordinator, "register") === "function" && typeof existingRun === "function") {
-          Reflect.apply(existingRun, existingCoordinator, [config]);
-          return;
-        }
+    const root = globalThis as any;
+    const key = Symbol.for("codeworkslabs.astro-analytics:client-coordinator:v3");
+    const existing = root[key];
+    if (existing) {
+      if (existing.runtimeToken === config.runtimeToken && existing.sameProviders(config.providers)) {
+        existing.enable(config.events === true);
       }
-    } catch { return; }
-
-    const clientKey = "astroAnalytics";
-    const handlers = Object.create(null);
-    const ownedProviders = Object.freeze(Array.from(config.providers));
-    let configuredProviders = Object.freeze([]);
+      return;
+    }
+    const providers = Object.freeze(Array.from(config.providers)) as string[];
+    const handlers = new Map<string, any>();
     let eventsEnabled = config.events === true;
-    let installedClient;
-
-    const isLocationAllowed = () => {
-      if (config.locationPolicyRequired !== true) return true;
-      try {
-        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
-        if (typeof policyKey !== "symbol") return false;
-        const policy = Reflect.get(root, policyKey);
-        if ((typeof policy !== "object" && typeof policy !== "function") || policy === null ||
-            Reflect.get(policy, "runtimeToken") !== config.runtimeToken) return false;
-        const keys = Reflect.ownKeys(policy);
-        const allows = Reflect.get(policy, "allowsCurrentLocation");
-        return keys.length === 6 && keys.includes("allowsCurrentLocation") && keys.includes("allowsUrl") &&
-          keys.includes("blockedQueryParameters") && keys.includes("runtimeToken") &&
-          keys.includes("setStartupPageLoadObserved") && keys.includes("startupPageLoadObserved") &&
-          typeof allows === "function" && Reflect.apply(allows, policy, []) === true;
-      } catch { return false; }
-    };
-
-    const normalizeAdapterResult = (value) => {
-      try {
-        if ((typeof value !== "object" && typeof value !== "function") || value === null) {
-          return Object.freeze({ ok: false, reason: "adapter-not-loaded" });
-        }
-        const keys = Reflect.ownKeys(value);
-        const ok = Reflect.get(value, "ok");
-        if (ok === true && keys.length === 1 && keys[0] === "ok") {
-          return Object.freeze({ ok: true });
-        }
-        const reason = Reflect.get(value, "reason");
-        if (ok === false && keys.length === 2 && keys.includes("ok") && keys.includes("reason") &&
-            ["adapter-not-loaded", "consent-pending", "invalid-event"].includes(reason)) {
-          return Object.freeze({ ok: false, reason });
-        }
-      } catch {}
-      return Object.freeze({ ok: false, reason: "adapter-not-loaded" });
-    };
-
-    const normalizeProviderStatus = (value) =>
-      ["ready", "adapter-not-loaded", "consent-pending"].includes(value)
-        ? value
-        : "adapter-not-loaded";
-
-    const normalizeEvent = (name, properties) => {
-      try {
-        if (typeof name !== "string") return undefined;
-        const normalizedName = name.trim();
-        if (normalizedName === "" || normalizedName.length > 128) return undefined;
-        if (properties === undefined) {
-          return Object.freeze({ name: normalizedName, properties: undefined });
-        }
-        if (typeof properties !== "object" || properties === null || Array.isArray(properties)) {
-          return undefined;
-        }
-        const prototype = Reflect.getPrototypeOf(properties);
-        if (prototype !== null && prototype !== Object.prototype) return undefined;
-        const propertyKeys = Reflect.ownKeys(properties);
-        if (propertyKeys.length > 100) return undefined;
-        const normalizedProperties = Object.create(null);
-        for (const key of propertyKeys) {
-          if (typeof key !== "string" || key === "" || key.length > 128) return undefined;
-          const value = Reflect.get(properties, key);
-          if (typeof value === "string") {
-            if (value.length > 1024) return undefined;
-          } else if (typeof value === "number") {
-            if (!Number.isFinite(value)) return undefined;
-          } else if (typeof value !== "boolean") {
-            return undefined;
-          }
-          Reflect.defineProperty(normalizedProperties, key, {
-            configurable: false, enumerable: true, value, writable: false
-          });
-        }
-        return Object.freeze({
-          name: normalizedName,
-          properties: Object.freeze(normalizedProperties),
-        });
-      } catch {
+    const normalizedEvent = (name: unknown, properties: unknown) => {
+      if (typeof name !== "string") return undefined;
+      const eventName = name.trim();
+      if (!eventName || eventName.length > 128) return undefined;
+      if (properties === undefined) return { name: eventName, properties: undefined };
+      if (!properties || typeof properties !== "object" || Array.isArray(properties))
         return undefined;
+      const entries = Object.entries(properties);
+      if (entries.length > 100) return undefined;
+      const copy: Record<string, string | number | boolean> = {};
+      for (const [key, value] of entries) {
+        if (!key || key.length > 128 ||
+            typeof value === "string" && value.length > 1024 ||
+            typeof value === "number" && !Number.isFinite(value) ||
+            typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") return undefined;
+        copy[key] = value as string | number | boolean;
       }
+      return { name: eventName, properties: copy };
     };
-
+    const client = Object.freeze({
+      __astroAnalyticsBrand: brand,
+      providers,
+      status() {
+        const statuses: Record<string, string> = {};
+        for (const provider of providers) {
+          const handler = handlers.get(provider);
+          try { statuses[provider] = handler ? handler.status() : "adapter-not-loaded"; }
+          catch { statuses[provider] = "adapter-not-loaded"; }
+        }
+        return Object.freeze(statuses);
+      },
+      track(name: string, properties?: Record<string, string | number | boolean>) {
+        const results: Record<string, any> = {};
+        const event = normalizedEvent(name, properties);
+        if (!event) {
+          for (const provider of providers) results[provider] = Object.freeze({ ok: false, reason: "invalid-event" });
+          return { ok: false, providers: Object.freeze(results), reason: "invalid-event" };
+        }
+        let accepted = providers.length > 0;
+        let failures = 0;
+        let sharedReason: string | undefined;
+        for (const provider of providers) {
+          const handler = handlers.get(provider);
+          let result;
+          try {
+            result = eventsEnabled && handler
+              ? handler.track(event.name, event.properties)
+              : { ok: false, reason: "adapter-not-loaded" };
+          } catch { result = { ok: false, reason: "adapter-not-loaded" }; }
+          if (!result || typeof result !== "object" ||
+              result.ok !== true && (result.ok !== false ||
+                !["adapter-not-loaded", "consent-pending", "invalid-event"].includes(result.reason))) {
+            result = { ok: false, reason: "adapter-not-loaded" };
+          }
+          results[provider] = Object.freeze(result);
+          if (!result.ok) {
+            accepted = false;
+            failures += 1;
+            sharedReason = sharedReason === undefined ? result.reason
+              : sharedReason === result.reason ? sharedReason : "";
+          }
+        }
+        const frozen = Object.freeze(results);
+        if (accepted) return { ok: true, providers: frozen };
+        return failures === providers.length && sharedReason
+          ? { ok: false, providers: frozen, reason: sharedReason }
+          : { ok: false, providers: frozen };
+      },
+    });
     const installClient = () => {
       if (!eventsEnabled) return;
-      const providerSnapshot = Object.freeze(Array.from(configuredProviders));
-      try {
-        if (installedClient !== undefined && Reflect.get(root, clientKey) === installedClient &&
-            Reflect.get(installedClient, "providers").length === providerSnapshot.length &&
-            providerSnapshot.every((provider, index) => Reflect.get(installedClient, "providers")[index] === provider)) return;
-      } catch {}
-      const client = Object.freeze({
-        __astroAnalyticsBrand: brand,
-        providers: providerSnapshot,
-        status() {
-          const statuses = Object.create(null);
-          for (const provider of providerSnapshot) {
-            let status = "adapter-not-loaded";
-            try {
-              if (!isLocationAllowed()) throw new TypeError("Blocked analytics location");
-              const handler = Reflect.get(handlers, provider);
-              const handlerStatus = (typeof handler === "object" || typeof handler === "function") && handler !== null
-                ? Reflect.get(handler, "status")
-                : undefined;
-              if (typeof handlerStatus === "function") {
-                status = normalizeProviderStatus(Reflect.apply(handlerStatus, handler, []));
-              }
-            } catch {}
-            Reflect.defineProperty(statuses, provider, {
-              configurable: false, enumerable: true, value: status, writable: false
-            });
-          }
-          return Object.freeze(statuses);
-        },
-        track(name, properties) {
-          const results = Object.create(null);
-          const event = normalizeEvent(name, properties);
-          if (event === undefined) {
-            for (const provider of providerSnapshot) {
-              Reflect.defineProperty(results, provider, {
-                configurable: false,
-                enumerable: true,
-                value: Object.freeze({ ok: false, reason: "invalid-event" }),
-                writable: false,
-              });
-            }
-            return Object.freeze({
-              ok: false,
-              providers: Object.freeze(results),
-              reason: "invalid-event",
-            });
-          }
-          if (!isLocationAllowed()) {
-            for (const provider of providerSnapshot) {
-              Reflect.defineProperty(results, provider, {
-                configurable: false,
-                enumerable: true,
-                value: Object.freeze({ ok: false, reason: "adapter-not-loaded" }),
-                writable: false,
-              });
-            }
-            return Object.freeze({
-              ok: false,
-              providers: Object.freeze(results),
-              reason: "adapter-not-loaded",
-            });
-          }
-          let allAccepted = providerSnapshot.length > 0;
-          let sharedReason;
-          let failures = 0;
-          for (const provider of providerSnapshot) {
-            let result;
-            try {
-              const handler = Reflect.get(handlers, provider);
-              const handlerTrack = (typeof handler === "object" || typeof handler === "function") && handler !== null
-                ? Reflect.get(handler, "track")
-                : undefined;
-              result = typeof handlerTrack === "function"
-                ? normalizeAdapterResult(Reflect.apply(handlerTrack, handler, [event.name, event.properties]))
-                : Object.freeze({ ok: false, reason: "adapter-not-loaded" });
-            } catch {
-              result = Object.freeze({ ok: false, reason: "adapter-not-loaded" });
-            }
-            if (result.ok !== true) {
-              allAccepted = false;
-              failures += 1;
-              if (failures === 1) sharedReason = result.reason;
-              else if (sharedReason !== result.reason) sharedReason = undefined;
-            }
-            Reflect.defineProperty(results, provider, {
-              configurable: false, enumerable: true, value: result, writable: false
-            });
-          }
-          const frozenResults = Object.freeze(results);
-          return Object.freeze(!allAccepted && failures === providerSnapshot.length && sharedReason !== undefined
-            ? { ok: false, providers: frozenResults, reason: sharedReason }
-            : { ok: allAccepted, providers: frozenResults });
-        }
-      });
-      const previousClientDescriptor = Reflect.getOwnPropertyDescriptor(root, clientKey);
-      const extensible = Reflect.isExtensible(root);
-      const canReplace = previousClientDescriptor === undefined
-        ? extensible
-        : previousClientDescriptor.configurable === true ||
-          (Object.prototype.hasOwnProperty.call(previousClientDescriptor, "value") && previousClientDescriptor.writable === true);
-      if (!canReplace) return;
-      const replacement = previousClientDescriptor === undefined
-        ? { configurable: true, enumerable: true, value: client, writable: true }
-        : Object.prototype.hasOwnProperty.call(previousClientDescriptor, "value")
-          ? { ...previousClientDescriptor, value: client }
-          : { configurable: previousClientDescriptor.configurable, enumerable: previousClientDescriptor.enumerable, value: client, writable: true };
-      if (Reflect.defineProperty(root, clientKey, replacement) === true && Reflect.get(root, clientKey) === client) {
-        installedClient = client;
-      }
+      if (root.astroAnalytics === undefined || root.astroAnalytics === client) root.astroAnalytics = client;
     };
-
-    const run = (nextConfig) => {
-      try {
-        if ((typeof nextConfig !== "object" && typeof nextConfig !== "function") || nextConfig === null ||
-            Reflect.get(nextConfig, "runtimeToken") !== config.runtimeToken) return;
-        const nextProviders = Reflect.get(nextConfig, "providers");
-        if (!Array.isArray(nextProviders) || Reflect.get(nextConfig, "events") !== true ||
-            nextProviders.length !== ownedProviders.length ||
-            !nextProviders.every((provider, index) => provider === ownedProviders[index])) return;
-        configuredProviders = Object.freeze(Array.from(nextProviders));
-        eventsEnabled = true;
-        installClient();
-      } catch {}
-    };
-    const register = (provider, handler, runtimeToken) => {
-      try {
-        if (runtimeToken !== config.runtimeToken || typeof provider !== "string" ||
-            !configuredProviders.includes(provider) ||
-            (typeof handler !== "object" && typeof handler !== "function") || handler === null ||
-            Reflect.get(handler, "__astroAnalyticsBrand") !== brand ||
-            Reflect.get(handler, "__astroAnalyticsProvider") !== provider ||
-            typeof Reflect.get(handler, "status") !== "function" ||
-            typeof Reflect.get(handler, "track") !== "function") return false;
-        Reflect.defineProperty(handlers, provider, {
-          configurable: true, enumerable: true, value: handler, writable: true
-        });
+    const coordinator = Object.freeze({
+      enable(value: boolean) { eventsEnabled = eventsEnabled || value; installClient(); },
+      register(provider: string, handler: any, token: string) {
+        if (token !== config.runtimeToken || !providers.includes(provider) ||
+            !handler || handler.__astroAnalyticsBrand !== brand ||
+            handler.__astroAnalyticsProvider !== provider ||
+            typeof handler.status !== "function" || typeof handler.track !== "function") return false;
+        handlers.set(provider, handler);
         return true;
-      } catch { return false; }
-    };
-    const coordinator = Object.freeze({ register, run, runtimeToken: config.runtimeToken });
-    let published = false;
-    try {
-      published = Reflect.defineProperty(root, coordinatorKey, {
-        configurable: false, value: coordinator, writable: false
-      }) === true && Reflect.get(root, coordinatorKey) === coordinator;
-    } catch {}
-    if (!published) return;
-    Reflect.apply(run, coordinator, [config]);
+      },
+      runtimeToken: config.runtimeToken,
+      sameProviders(next: unknown) {
+        return Array.isArray(next) && next.length === providers.length &&
+          next.every((provider, index) => provider === providers[index]);
+      },
+    });
+    Object.defineProperty(root, key, { value: coordinator });
+    installClient();
   } catch {
-    // The reserved global can be hostile; bootstrap must never escape an exception.
+    // Analytics must never break the host page.
   }
-})();`;
 }
 
-export function createFathomBootstrapScript(
-  options: FathomRuntimeOptions,
-): string {
-  const serializedOptions = serializeRuntimeOptions(options);
-  return `(() => {
-  "use strict";
-  const config = ${serializedOptions};
-  const brand = ${JSON.stringify(RUNTIME_CLIENT_BRAND)};
-  const scriptId = ${JSON.stringify(FATHOM_SCRIPT_ID)};
-  try {
-    const root = globalThis;
-    const symbolValue = Reflect.get(root, "Symbol");
-    if ((typeof symbolValue !== "object" && typeof symbolValue !== "function") || symbolValue === null) return;
-    const symbolFor = Reflect.get(symbolValue, "for");
-    if (typeof symbolFor !== "function") return;
-    const stateKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:fathom:v1"]);
-    if (typeof stateKey !== "symbol") return;
-    const documentValue = Reflect.get(root, "document");
-    if ((typeof documentValue !== "object" && typeof documentValue !== "function") || documentValue === null) return;
-    const coordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:fathom-coordinator:v1"]);
-    if (typeof coordinatorKey !== "symbol") return;
-    const clientCoordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:client-coordinator:v2"]);
-    if (typeof clientCoordinatorKey !== "symbol") return;
-    const isLocationAllowed = () => {
-      if (config.locationPolicyRequired !== true) return true;
-      try {
-        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
-        if (typeof policyKey !== "symbol") return false;
-        const policy = Reflect.get(root, policyKey);
-        const allows = (typeof policy === "object" || typeof policy === "function") && policy !== null
-          ? Reflect.get(policy, "allowsCurrentLocation")
-          : undefined;
-        const keys = Reflect.ownKeys(policy);
-        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          keys.length === 6 && keys.includes("allowsUrl") && keys.includes("blockedQueryParameters") &&
-          keys.includes("setStartupPageLoadObserved") && keys.includes("startupPageLoadObserved") && typeof allows === "function" &&
-          Reflect.apply(allows, policy, []) === true;
-      } catch { return false; }
-    };
-    const isUrlAllowed = (value) => {
-      if (config.locationPolicyRequired !== true) return true;
-      try {
-        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
-        const policy = Reflect.get(root, policyKey);
-        const allows = Reflect.get(policy, "allowsUrl");
-        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          Reflect.ownKeys(policy).length === 6 && typeof allows === "function" &&
-          Reflect.apply(allows, policy, [value]) === true;
-      } catch { return false; }
-    };
-    const startupPageLoadObserved = () => {
-      if (config.locationPolicyRequired !== true) return false;
-      try {
-        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
-        const policy = Reflect.get(root, policyKey);
-        const observed = Reflect.get(policy, "startupPageLoadObserved");
-        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          Reflect.ownKeys(policy).length === 6 && typeof observed === "function" &&
-          Reflect.apply(observed, policy, []) === true;
-      } catch { return false; }
-    };
-    try {
-      const existingCoordinator = Reflect.get(documentValue, coordinatorKey);
-      if ((typeof existingCoordinator === "object" || typeof existingCoordinator === "function") && existingCoordinator !== null &&
-          Reflect.get(existingCoordinator, "runtimeToken") === config.runtimeToken) {
-        const existingKeys = Reflect.ownKeys(existingCoordinator);
-        const existingRun = Reflect.get(existingCoordinator, "run");
-        if (existingKeys.length === 2 && existingKeys.includes("run") && existingKeys.includes("runtimeToken") &&
-            typeof existingRun === "function") {
-          Reflect.apply(existingRun, existingCoordinator, [config]);
-          return;
-        }
-      }
-    } catch { return; }
-    let authenticState;
-    let completionCounter = 0;
-    let completedNavigationCompletion;
-    let completedNavigationReferrer;
-    let completedNavigationUrl;
-    let lastTrackedCompletion;
-    let navigationObservationGap = false;
-    let navigationInFlight = false;
-    const requiredLocationPolicy = config.locationPolicyRequired;
-    const coordinatorInstallHref = (() => {
-      try {
-        const href = Reflect.get(Reflect.get(root, "location"), "href");
-        return typeof href === "string" ? href : undefined;
-      } catch { return undefined; }
-    })();
-    const run = (config) => {
-    if (config.locationPolicyRequired !== requiredLocationPolicy) return;
-    const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
-    const isPackageScript = (value) => {
-      try {
-        if ((typeof value !== "object" && typeof value !== "function") || value === null ||
-            Reflect.get(value, "ownerDocument") !== documentValue || Reflect.get(value, "tagName") !== "SCRIPT" ||
-            Reflect.get(value, "defer") !== true ||
-            Reflect.get(value, "async") === true || Reflect.get(value, "noModule") === true) return false;
-        const type = Reflect.get(value, "type");
-        if (typeof type !== "string" || type.trim() !== "") return false;
-        const getAttribute = Reflect.get(value, "getAttribute");
-        return typeof getAttribute === "function" &&
-          Reflect.apply(getAttribute, value, ["data-cwl-astro-analytics"]) === "fathom-v1";
-      } catch { return false; }
-    };
-    const isOwnedScript = (value) => {
-      try {
-        if (!isPackageScript(value) || Reflect.get(value, "src") !== config.scriptSrc) return false;
-        const getAttribute = Reflect.get(value, "getAttribute");
-        return Reflect.apply(getAttribute, value, ["data-site"]) === config.siteId &&
-          Reflect.apply(getAttribute, value, ["data-auto"]) === "false" &&
-          Reflect.apply(getAttribute, value, ["data-cwl-pageviews"]) === config.pageviews &&
-          Reflect.apply(getAttribute, value, ["data-honor-dnt"]) === (config.honorDnt === true ? "true" : null) &&
-          Reflect.apply(getAttribute, value, ["data-canonical"]) === (config.canonical === false ? "false" : null);
-      } catch { return false; }
-    };
-    const matchesConfiguredScript = (value) => {
-      try {
-        if (!isOwnedScript(value) || Reflect.get(value, "id") !== selectedScriptId ||
-            Reflect.get(value, "noModule") !== false) return false;
-        const getAttributeNames = Reflect.get(value, "getAttributeNames");
-        const getElementById = Reflect.get(documentValue, "getElementById");
-        if (typeof getAttributeNames !== "function" || typeof getElementById !== "function") return false;
-        const connected = Reflect.get(value, "isConnected") === true;
-        const boundScript = Reflect.apply(getElementById, documentValue, [selectedScriptId]);
-        if (connected ? boundScript !== value : boundScript !== null) return false;
-        const names = Reflect.apply(getAttributeNames, value, []);
-        if (!Array.isArray(names)) return false;
-        const dataNames = names.filter((name) => typeof name === "string" && name.startsWith("data-"));
-        const expected = ["data-auto", "data-cwl-astro-analytics", "data-cwl-pageviews", "data-site"];
-        if (config.honorDnt === true) expected.push("data-honor-dnt");
-        if (config.canonical === false) expected.push("data-canonical");
-        return dataNames.length === expected.length && expected.every((name) => dataNames.includes(name));
-      } catch { return false; }
-    };
-    let previousState;
-    let previousLifecycle;
-    let previousDedup;
-    let previousReadiness;
-    let previousScript;
-    try {
-      previousState = authenticState;
-      if ((typeof previousState === "object" || typeof previousState === "function") && previousState !== null) {
-        const candidateScript = Reflect.get(previousState, "script");
-        const boundState = isPackageScript(candidateScript)
-          ? Reflect.get(candidateScript, stateKey)
-          : undefined;
-        const keys = (typeof boundState === "object" || typeof boundState === "function") && boundState !== null
-          ? Reflect.ownKeys(boundState)
-          : [];
-        if (keys.length === 7 && ["dedupState", "events", "lifecycle", "pageLoadListener", "readiness", "runtimeToken", "script"].every((key) => keys.includes(key)) &&
-            Reflect.get(boundState, "runtimeToken") === config.runtimeToken &&
-            Reflect.get(boundState, "script") === candidateScript) {
-          previousState = boundState;
-          previousLifecycle = Reflect.get(boundState, "lifecycle");
-          previousDedup = Reflect.get(boundState, "dedupState");
-          previousReadiness = Reflect.get(boundState, "readiness");
-          previousScript = candidateScript;
-        } else {
-          previousState = undefined;
-        }
-      }
-    } catch {}
-    const installEventClient = (lifecycle, pending, clientState, isVendorReady, isEventsEnabled) => {
-      if (!config.events) return;
-      try {
-        const client = Object.freeze({
-        __astroAnalyticsBrand: brand,
-        __astroAnalyticsProvider: "fathom",
-        status() {
-          try {
-            if (authenticState !== clientState) return "adapter-not-loaded";
-            if (typeof isEventsEnabled === "function" &&
-                Reflect.apply(isEventsEnabled, undefined, []) !== true) return "adapter-not-loaded";
-            if (pending) return "consent-pending";
-            if (Reflect.get(lifecycle, "active") !== true) return "adapter-not-loaded";
-            if (typeof isVendorReady !== "function" ||
-                Reflect.apply(isVendorReady, undefined, []) !== true) return "adapter-not-loaded";
-            const fathom = Reflect.get(root, "fathom");
-            return ((typeof fathom === "object" || typeof fathom === "function") && fathom !== null &&
-              typeof Reflect.get(fathom, "trackEvent") === "function")
-              ? "ready"
-              : "adapter-not-loaded";
-          } catch { return "adapter-not-loaded"; }
-        },
-        track(name, properties) {
-          try {
-            if (authenticState !== clientState) {
-              return { ok: false, reason: "adapter-not-loaded" };
-            }
-            if (typeof isEventsEnabled === "function" &&
-                Reflect.apply(isEventsEnabled, undefined, []) !== true) {
-              return { ok: false, reason: "adapter-not-loaded" };
-            }
-            if (pending) {
-              return { ok: false, reason: "consent-pending" };
-            }
-            if (Reflect.get(lifecycle, "active") !== true) {
-              return { ok: false, reason: "adapter-not-loaded" };
-            }
-            if (typeof isVendorReady !== "function" || Reflect.apply(isVendorReady, undefined, []) !== true) {
-              return { ok: false, reason: "adapter-not-loaded" };
-            }
-            const fathom = Reflect.get(root, "fathom");
-            if ((typeof fathom !== "object" && typeof fathom !== "function") || fathom === null) {
-              return { ok: false, reason: "adapter-not-loaded" };
-            }
-            const trackEvent = Reflect.get(fathom, "trackEvent");
-            if (typeof trackEvent !== "function") {
-              return { ok: false, reason: "adapter-not-loaded" };
-            }
-            const hasValue = properties !== undefined &&
-              Object.prototype.hasOwnProperty.call(properties, "_value");
-            const value = hasValue ? Reflect.get(properties, "_value") : undefined;
-            if (hasValue && (!Number.isSafeInteger(value) || value < 0)) {
-              return { ok: false, reason: "invalid-event" };
-            }
-            const eventOptions = hasValue ? { _value: value } : undefined;
-            Reflect.apply(trackEvent, fathom, eventOptions === undefined ? [name] : [name, eventOptions]);
-            return { ok: true };
-          } catch {
-            return { ok: false, reason: "adapter-not-loaded" };
-          }
-        }
-      });
-        const clientCoordinator = Reflect.get(root, clientCoordinatorKey);
-        const register = (typeof clientCoordinator === "object" || typeof clientCoordinator === "function") && clientCoordinator !== null
-          ? Reflect.get(clientCoordinator, "register")
-          : undefined;
-        if (typeof register !== "function" || Reflect.get(clientCoordinator, "runtimeToken") !== config.runtimeToken) return;
-        Reflect.apply(register, clientCoordinator, ["fathom", client, config.runtimeToken]);
-      } catch {
-        // The optional event client must not prevent independent pageview loading.
-      }
-    };
-    if (consentPending) {
-      try {
-        if (Reflect.get(previousLifecycle, "active") === true) return;
-      } catch {}
-      const lifecycle = Object.freeze({ active: false });
-      const state = Object.freeze({ dedupState: previousDedup, events: config.events, lifecycle, pageLoadListener: undefined, readiness: undefined, runtimeToken: config.runtimeToken, script: undefined });
-      let published = false;
-      try {
-        published = Reflect.defineProperty(documentValue, stateKey, {
-          configurable: true,
-          value: state,
-          writable: true,
-        }) === true && Reflect.get(documentValue, stateKey) === state;
-        if (!published) return;
-      } catch {}
-      if (!published) return;
-      authenticState = state;
-      installEventClient(lifecycle, true, state);
-      return;
-    }
+type BrowserAdapter = {
+  name: string;
+  scriptId: string;
+  configureScript(script: any, config: any): void;
+  prepare(root: any, config: any): boolean;
+  ready(root: any, config: any): boolean;
+  cleanup(root: any, config: any): void;
+  pageview(root: any, route: any, config: any): boolean;
+  context(root: any, route: any, config: any): boolean;
+  event(root: any, name: string, properties: any, route: any, config: any): any;
+};
 
-    const getElementById = Reflect.get(documentValue, "getElementById");
-    if (typeof getElementById !== "function") return;
-    const getById = (id) => Reflect.apply(getElementById, documentValue, [id]);
-    let selectedScriptId;
-    let reusableScript;
-    try {
-      if (isOwnedScript(previousScript) && Reflect.get(previousScript, "isConnected") !== true) {
-        if (Reflect.get(previousReadiness, "ready") === true) {
-          const previousId = Reflect.get(previousScript, "id");
-          if (typeof previousId === "string" && getById(previousId) === null) {
-            selectedScriptId = previousId;
-            reusableScript = previousScript;
-          }
-        } else {
-          const abort = Reflect.get(previousReadiness, "abort");
-          if (typeof abort === "function") Reflect.apply(abort, previousReadiness, []);
-        }
+// Serialized once per configured provider. Provider-specific behavior is supplied by adapter.
+function browserProviderRuntime(config: any, adapter: BrowserAdapter, brand: string): void {
+  try {
+    const root = globalThis as any;
+    const documentValue = root.document;
+    if (!documentValue || typeof documentValue.addEventListener !== "function") return;
+    const stateKey = Symbol.for(`codeworkslabs.astro-analytics:${adapter.name}:v2`);
+    const existing = root[stateKey];
+    if (existing) {
+      if (existing.runtimeToken === config.runtimeToken && existing.identity === JSON.stringify(config)) {
+        existing.register();
+        existing.refresh();
       }
-    } catch {}
-    for (let index = 0; reusableScript === undefined && index <= 100; index += 1) {
-      const candidateId = index === 0 ? scriptId : scriptId + "-owned" + (index === 1 ? "" : "-" + index);
-      const candidate = getById(candidateId);
-      if (isOwnedScript(candidate)) {
-        if (candidate === previousScript) {
-          selectedScriptId = candidateId;
-          reusableScript = candidate;
-          break;
-        }
-        continue;
-      }
-      if (isPackageScript(candidate)) continue;
-      if ((candidate === null || candidate === undefined) && selectedScriptId === undefined) {
-        selectedScriptId = candidateId;
-      }
-    }
-    if (selectedScriptId === undefined) return;
-    if (reusableScript !== undefined) {
-      try {
-        if (Reflect.get(previousLifecycle, "active") !== true) return;
-        const previousEvents = Reflect.get(previousState, "events");
-        if (config.events === false) {
-          const disable = Reflect.get(previousEvents, "disable");
-          if (typeof disable === "function") Reflect.apply(disable, previousEvents, []);
-        } else {
-          const enable = Reflect.get(previousEvents, "enable");
-          if (typeof enable === "function") Reflect.apply(enable, previousEvents, []);
-        }
-        const restored = Reflect.defineProperty(documentValue, stateKey, {
-          configurable: true,
-          value: previousState,
-          writable: true,
-        }) === true && Reflect.get(documentValue, stateKey) === previousState;
-        if (!restored) return;
-        installEventClient(previousLifecycle, false, previousState, () => {
-          const eventsReady = Reflect.get(previousReadiness, "eventsReady");
-          return typeof eventsReady === "function" &&
-            Reflect.apply(eventsReady, previousReadiness, []) === true;
-        },
-        () => Reflect.get(previousEvents, "enabled") === true,
-        );
-        const retryPageview = Reflect.get(previousReadiness, "retryPageview");
-        if (typeof retryPageview === "function") Reflect.apply(retryPageview, previousReadiness, []);
-      } catch {}
       return;
     }
-    let lifecycleActive = true;
-    const lifecycle = Object.freeze({
-      get active() { return lifecycleActive; }
-    });
-    const script = Reflect.apply(Reflect.get(documentValue, "createElement"), documentValue, ["script"]);
-    Reflect.set(script, "id", selectedScriptId);
-    Reflect.set(script, "src", config.scriptSrc);
-    Reflect.set(script, "async", false);
-    Reflect.set(script, "defer", true);
-    Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-cwl-astro-analytics", "fathom-v1"]);
-    Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-cwl-pageviews", config.pageviews]);
-    Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-site", config.siteId]);
-    if (config.honorDnt === true) {
-      Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-honor-dnt", "true"]);
-    }
-    if (config.canonical === false) {
-      Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-canonical", "false"]);
-    }
-    Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-auto", "false"]);
-    if (Reflect.getOwnPropertyDescriptor(root, "fathom") !== undefined) return;
-    let bindingValue;
-    let assignedFathom;
-    let vendorFathom;
-    let vendorPageview;
-    let vendorEvent;
-    const bindingGet = () => bindingValue;
-    const bindingSet = (value) => {
-      bindingValue = value;
-      try {
-        if (Reflect.get(documentValue, "currentScript") === script && matchesConfiguredScript(script)) assignedFathom = value;
-      } catch {}
-    };
-    if (Reflect.defineProperty(root, "fathom", {
-      configurable: true, enumerable: true, get: bindingGet, set: bindingSet
-    }) !== true) return;
-    const bindingDescriptor = Reflect.getOwnPropertyDescriptor(root, "fathom");
-    if (bindingDescriptor?.get !== bindingGet || bindingDescriptor?.set !== bindingSet) return;
-    const releaseBinding = (ownedValue, preserveOwned) => {
-      try {
-        const descriptor = Reflect.getOwnPropertyDescriptor(root, "fathom");
-        if (descriptor?.get !== bindingGet || descriptor?.set !== bindingSet) return;
-        const currentValue = bindingGet();
-        if (!preserveOwned && currentValue === ownedValue) Reflect.deleteProperty(root, "fathom");
-        else Reflect.defineProperty(root, "fathom", {
-          configurable: true, enumerable: true, value: currentValue, writable: true
-        });
-      } catch {}
-    };
-    const installHref = coordinatorInstallHref;
-    let pendingPageview = typeof completedNavigationCompletion === "number" &&
-      typeof completedNavigationUrl === "string"
-      ? Object.freeze({
-          completion: completedNavigationCompletion,
-          referrer: completedNavigationReferrer,
-          url: completedNavigationUrl,
-        })
+    const policy = () => config.locationPolicyRequired === true
+      ? root[Symbol.for("codeworkslabs.astro-analytics:location-policy:v1")]
       : undefined;
-    let vendorReady = false;
-    let readinessVerified = false;
-    let eventsEnabled = config.events;
-    const events = Object.freeze({
-      disable() { eventsEnabled = false; },
-      enable() { eventsEnabled = true; },
-      get enabled() { return eventsEnabled; }
-    });
-    const readiness = Object.freeze({
-      abort() { failRuntime(); },
-      eventsReady() { return readinessVerified && hasUsableFathomEvents(); },
-      get installHref() { return installHref; },
-      get ready() { return readinessVerified && hasUsableFathom(); },
-      retryPageview() { flushReadyPageviews(); }
-    });
-    const readHref = () => {
-      if (!isLocationAllowed()) return undefined;
-      try {
-        const href = Reflect.get(Reflect.get(root, "location"), "href");
-        return typeof href === "string" ? href : undefined;
-      } catch { return undefined; }
-    };
-    const isPrerendering = () => {
-      try { return Reflect.get(documentValue, "prerendering") === true; } catch { return false; }
-    };
-    const hasUsableFathom = () => {
-      try {
-        const fathom = Reflect.get(root, "fathom");
-        if (!vendorReady || !matchesConfiguredScript(script) || fathom !== vendorFathom ||
-            (typeof fathom !== "object" && typeof fathom !== "function") || fathom === null) return false;
-        if (config.pageviews !== "none" &&
-            (typeof vendorPageview !== "function" || Reflect.get(fathom, "trackPageview") !== vendorPageview)) return false;
-        return true;
-      } catch { return false; }
-    };
-    const hasUsableFathomEvents = () => {
-      try {
-        if (!hasUsableFathom()) return false;
-        const fathom = Reflect.get(root, "fathom");
-        return typeof vendorEvent === "function" && Reflect.get(fathom, "trackEvent") === vendorEvent;
-      } catch { return false; }
-    };
-    let state;
-    const sendPageview = (pageview) => {
-      try {
-        if (!isLocationAllowed() || !hasUsableFathom() || pageview === undefined ||
-            pageview.completion === lastTrackedCompletion ||
-            authenticState !== state) return pageview?.completion === lastTrackedCompletion;
-        const options = typeof pageview.referrer === "string" && pageview.referrer.length > 0
-          ? { referrer: pageview.referrer }
-          : undefined;
-        Reflect.apply(vendorPageview, vendorFathom, options === undefined ? [] : [options]);
-        lastTrackedCompletion = pageview.completion;
-        try { Reflect.set(dedupState, "lastTrackedCompletion", pageview.completion); } catch {}
-        return true;
-      } catch { return false; }
-    };
-    const pageLoadListener = config.pageviews === "none" ? undefined : () => {
-      if (lifecycle.active !== true) return;
-      if (authenticState !== state) return;
-      const href = readHref();
-      if (typeof href !== "string") {
-        navigationObservationGap = true;
-        navigationInFlight = false;
-        pendingPageview = undefined;
-        completedNavigationCompletion = undefined;
-        completedNavigationReferrer = undefined;
-        completedNavigationUrl = undefined;
-        return;
-      }
-      const initialReferrer = typeof completedNavigationUrl === "string"
-        ? undefined
-        : (() => {
-            try {
-              const value = Reflect.get(documentValue, "referrer");
-              if (typeof value !== "string") return "";
-              return isUrlAllowed(value) ? value : null;
-            } catch { return ""; }
-          })();
-      const closesObservationGap = navigationObservationGap || initialReferrer === null;
-      const referrer = closesObservationGap
-        ? undefined
-        : typeof completedNavigationUrl === "string"
-          ? completedNavigationUrl
-          : initialReferrer;
-      navigationObservationGap = false;
-      navigationInFlight = false;
-      completedNavigationUrl = href;
-      completedNavigationReferrer = referrer;
-      completedNavigationCompletion = ++completionCounter;
-      const pageview = Object.freeze({ completion: completedNavigationCompletion, referrer, url: href });
-      if (closesObservationGap) {
-        pendingPageview = undefined;
-        return;
-      }
-      if (vendorReady && !isPrerendering()) {
-        pendingPageview = pageview;
-        if (sendPageview(pageview)) pendingPageview = undefined;
-      } else pendingPageview = pageview;
-    };
-    const beforeNavigationListener = config.pageviews === "none" ? undefined : () => {
-      navigationInFlight = true;
-    };
-    let previousLastTrackedCompletion;
-    try {
-      if ((typeof previousDedup === "object" || typeof previousDedup === "function") && previousDedup !== null) {
-          const previousCompletion = Reflect.get(previousDedup, "lastTrackedCompletion");
-          if (typeof previousCompletion === "number") previousLastTrackedCompletion = previousCompletion;
-      }
-    } catch {}
-    if (lastTrackedCompletion === undefined) lastTrackedCompletion = previousLastTrackedCompletion;
-    const dedupState = { lastTrackedCompletion };
-    state = Object.freeze({ dedupState, events, lifecycle, pageLoadListener, readiness, runtimeToken: config.runtimeToken, script });
-    let scriptBound = false;
-    try {
-      scriptBound = Reflect.defineProperty(script, stateKey, {
-        configurable: false,
-        value: state,
-        writable: false,
-      }) === true && Reflect.get(script, stateKey) === state;
-    } catch {}
-    if (!scriptBound) { releaseBinding(undefined, false); return; }
-    let published = false;
-    try {
-      published = Reflect.defineProperty(documentValue, stateKey, {
-        configurable: true,
-        value: state,
-        writable: true,
-      }) === true && Reflect.get(documentValue, stateKey) === state;
-    } catch {}
-    if (!published) {
-      releaseBinding(undefined, false);
-      return;
-    }
-    authenticState = state;
-    installEventClient(lifecycle, false, state, hasUsableFathomEvents, () => eventsEnabled);
-    const flushReadyPageviews = () => {
-      if (lifecycle.active !== true || isPrerendering()) return;
-      if (authenticState !== state) return;
-      if (config.pageviews === "none" || navigationObservationGap || navigationInFlight) return;
-      const currentHref = readHref();
-      const pending = pendingPageview;
-      if (pending !== undefined) {
-        if (pending.url === currentHref && sendPageview(pending)) pendingPageview = undefined;
-      }
-    };
-    const failRuntime = () => {
-      if (!lifecycleActive) return;
-      if (authenticState !== state) return;
-      lifecycleActive = false;
-      pendingPageview = undefined;
-      navigationObservationGap = true;
-      navigationInFlight = false;
-      completedNavigationCompletion = undefined;
-      completedNavigationReferrer = undefined;
-      completedNavigationUrl = undefined;
-      if (typeof pageLoadListener === "function") {
-        try {
-          const removeEventListener = Reflect.get(documentValue, "removeEventListener");
-          if (typeof removeEventListener === "function") {
-            Reflect.apply(removeEventListener, documentValue, ["astro:page-load", pageLoadListener]);
-          }
-        } catch {}
-      }
-      if (typeof beforeNavigationListener === "function") {
-        try {
-          const removeEventListener = Reflect.get(documentValue, "removeEventListener");
-          if (typeof removeEventListener === "function") {
-            Reflect.apply(removeEventListener, documentValue, ["astro:before-preparation", beforeNavigationListener]);
-          }
-        } catch {}
-      }
-      try {
-        const remove = Reflect.get(script, "remove");
-        if (typeof remove === "function") Reflect.apply(remove, script, []);
-      } catch {}
-      releaseBinding(assignedFathom, false);
-    };
-    if (typeof pageLoadListener === "function") {
-      try {
-        const addEventListener = Reflect.get(documentValue, "addEventListener");
-        if (typeof addEventListener !== "function") throw new TypeError("Astro page-load observer unavailable");
-        if (typeof beforeNavigationListener === "function") {
-          Reflect.apply(addEventListener, documentValue, ["astro:before-preparation", beforeNavigationListener]);
-        }
-        Reflect.apply(addEventListener, documentValue, ["astro:page-load", pageLoadListener]);
-      } catch {
-        navigationObservationGap = true;
-        failRuntime();
-        return;
-      }
-      if (startupPageLoadObserved()) {
-        navigationObservationGap = true;
-        pageLoadListener();
-      }
-    }
-    if (config.pageviews !== "none") {
-      const hasClientRouter = (() => {
-        try {
-          const querySelector = Reflect.get(documentValue, "querySelector");
-          return typeof querySelector === "function" &&
-            Reflect.apply(querySelector, documentValue, ['[name="astro-view-transitions-enabled"]']) !== null;
-        } catch { return true; }
-      })();
-      if (!hasClientRouter && !navigationObservationGap && typeof completedNavigationUrl !== "string") {
-        try {
-          const readyState = Reflect.get(documentValue, "readyState");
-          if (readyState === "interactive" || readyState === "complete") {
-            pageLoadListener();
-          } else {
-            const addEventListener = Reflect.get(documentValue, "addEventListener");
-            Reflect.apply(addEventListener, documentValue, ["DOMContentLoaded", pageLoadListener, { once: true }]);
-          }
-        } catch {
-          navigationObservationGap = true;
-          failRuntime();
-          return;
-        }
-      }
-    }
-    const hasRequiredFathomApi = () => {
-      try {
-        const fathom = Reflect.get(root, "fathom");
-        if (!matchesConfiguredScript(script) || fathom !== assignedFathom ||
-            (typeof fathom !== "object" && typeof fathom !== "function") || fathom === null) return false;
-        const trackPageview = Reflect.get(fathom, "trackPageview");
-        const trackEvent = Reflect.get(fathom, "trackEvent");
-        if (config.pageviews !== "none") {
-          if (typeof trackPageview !== "function") return false;
-        }
-        if (config.pageviews === "none" && config.events === true && typeof trackEvent !== "function") return false;
-        vendorFathom = fathom;
-        vendorPageview = trackPageview;
-        vendorEvent = trackEvent;
-        return true;
-      } catch { return false; }
-    };
-    const activateRuntime = () => {
-      if (lifecycle.active !== true) return;
-      if (authenticState !== state) return;
-      if (!hasRequiredFathomApi()) {
-        failRuntime();
-        return;
-      }
-      vendorReady = true;
-      readinessVerified = true;
-      releaseBinding(vendorFathom, true);
-      if (config.pageviews === "none") return;
-      if (isPrerendering()) {
-        try {
-          const addEventListener = Reflect.get(documentValue, "addEventListener");
-          if (typeof addEventListener === "function") {
-            Reflect.apply(addEventListener, documentValue, ["prerenderingchange", flushReadyPageviews, { once: true }]);
-          }
-        } catch {}
-        return;
-      }
-      flushReadyPageviews();
-    };
-    try {
-      const addScriptListener = Reflect.get(script, "addEventListener");
-      if (typeof addScriptListener !== "function") throw new TypeError("Fathom script listener unavailable");
-      Reflect.apply(addScriptListener, script, ["load", activateRuntime, { once: true }]);
-      Reflect.apply(addScriptListener, script, ["error", () => {
-        failRuntime();
-      }, { once: true }]);
-      const head = Reflect.get(documentValue, "head");
-      if ((typeof head !== "object" && typeof head !== "function") || head === null) {
-        throw new TypeError("Document head unavailable");
-      }
-      const appendChild = Reflect.get(head, "appendChild");
-      if (typeof appendChild !== "function") throw new TypeError("Document append unavailable");
-      Reflect.apply(appendChild, head, [script]);
-    } catch {
-      failRuntime();
-      return;
-    }
-    };
-    const coordinator = Object.freeze({ run, runtimeToken: config.runtimeToken });
-    let coordinatorPublished = false;
-    try {
-      coordinatorPublished = Reflect.defineProperty(documentValue, coordinatorKey, {
-        configurable: false,
-        value: coordinator,
-        writable: false,
-      }) === true && Reflect.get(documentValue, coordinatorKey) === coordinator;
-    } catch {}
-    if (!coordinatorPublished) return;
-    Reflect.apply(run, coordinator, [config]);
-  } catch {
-    // Browser globals and DOM methods can be hostile; runtime must never escape.
-  }
-})();`;
-}
-
-export function createPlausibleBootstrapScript(
-  options: PlausibleRuntimeOptions,
-): string {
-  const serializedOptions = serializeRuntimeOptions(options);
-  return `(() => {
-  "use strict";
-  const config = ${serializedOptions};
-  const brand = ${JSON.stringify(RUNTIME_CLIENT_BRAND)};
-  const scriptId = ${JSON.stringify(PLAUSIBLE_SCRIPT_ID)};
-  try {
-    const root = globalThis;
-    const documentValue = Reflect.get(root, "document");
-    if ((typeof documentValue !== "object" && typeof documentValue !== "function") || documentValue === null) return;
-    const symbolValue = Reflect.get(root, "Symbol");
-    if ((typeof symbolValue !== "object" && typeof symbolValue !== "function") || symbolValue === null) return;
-    const symbolFor = Reflect.get(symbolValue, "for");
-    if (typeof symbolFor !== "function") return;
-    const coordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:plausible:v1"]);
-    if (typeof coordinatorKey !== "symbol") return;
-    const isLocationAllowed = () => {
+    const allowsUrl = (value: string) => {
       if (config.locationPolicyRequired !== true) return true;
-      try {
-        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
-        if (typeof policyKey !== "symbol") return false;
-        const policy = Reflect.get(root, policyKey);
-        const allows = (typeof policy === "object" || typeof policy === "function") && policy !== null
-          ? Reflect.get(policy, "allowsCurrentLocation")
-          : undefined;
-        const keys = Reflect.ownKeys(policy);
-        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          keys.length === 6 && keys.includes("allowsUrl") && keys.includes("blockedQueryParameters") &&
-          keys.includes("setStartupPageLoadObserved") && keys.includes("startupPageLoadObserved") && typeof allows === "function" &&
-          Reflect.apply(allows, policy, []) === true;
-      } catch { return false; }
+      try { return policy()?.runtimeToken === config.runtimeToken && policy().allowsUrl(value) === true; }
+      catch { return false; }
     };
-    const isUrlAllowed = (value) => {
+    const locationAllowed = () => {
       if (config.locationPolicyRequired !== true) return true;
-      try {
-        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
-        const policy = Reflect.get(root, policyKey);
-        const allows = Reflect.get(policy, "allowsUrl");
-        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          Reflect.ownKeys(policy).length === 6 && typeof allows === "function" &&
-          Reflect.apply(allows, policy, [value]) === true;
-      } catch { return false; }
+      try { return policy()?.runtimeToken === config.runtimeToken && policy().allowsCurrentLocation() === true; }
+      catch { return false; }
     };
-    const startupPageLoadObserved = () => {
+    const startupCompletion = () => {
       if (config.locationPolicyRequired !== true) return false;
-      try {
-        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
-        const policy = Reflect.get(root, policyKey);
-        const observed = Reflect.get(policy, "startupPageLoadObserved");
-        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          Reflect.ownKeys(policy).length === 6 && typeof observed === "function" &&
-          Reflect.apply(observed, policy, []) === true;
-      } catch { return false; }
+      try { return policy()?.runtimeToken === config.runtimeToken && policy().startupPageLoadObserved() === true; }
+      catch { return false; }
     };
-    try {
-      const existingCoordinator = Reflect.get(documentValue, coordinatorKey);
-      if ((typeof existingCoordinator === "object" || typeof existingCoordinator === "function") && existingCoordinator !== null &&
-          Reflect.get(existingCoordinator, "runtimeToken") === config.runtimeToken) {
-        const keys = Reflect.ownKeys(existingCoordinator);
-        const existingRun = Reflect.get(existingCoordinator, "run");
-        if (keys.length === 2 && keys.includes("run") && keys.includes("runtimeToken") && typeof existingRun === "function") {
-          Reflect.apply(existingRun, existingCoordinator, [config]);
-        }
-        return;
-      }
-    } catch { return; }
-
-    let activeConfig;
-    let activeGeneration;
-    let generationCounter = 0;
-    let handler;
-    let lifecycle;
-    let pageLoadListener;
-    let completionCounter = 0;
-    let completedNavigationReferrer;
-    let completedNavigationUrl;
-    let lastTrackedCompletion;
-    let pendingPageview;
-    let navigationObservationGap = false;
-    let locationObservationGap = false;
-    let requestReferrer;
-    let vendorReady = false;
-    let vendorClient;
-    let vendorScript;
-
-    const sameConfig = (value) => {
+    const readRoute = (previous?: any) => {
+      if (!locationAllowed()) return undefined;
       try {
-        return (typeof value === "object" || typeof value === "function") && value !== null &&
-          Reflect.get(value, "captureOnLocalhost") === config.captureOnLocalhost &&
-          Reflect.get(value, "consentMode") === config.consentMode &&
-          Reflect.get(value, "endpoint") === config.endpoint &&
-          Reflect.get(value, "events") === config.events &&
-          Reflect.get(value, "locationPolicyRequired") === config.locationPolicyRequired &&
-          Reflect.get(value, "pageviews") === config.pageviews &&
-          Reflect.get(value, "runtimeToken") === config.runtimeToken &&
-          Reflect.get(value, "scriptSrc") === config.scriptSrc;
-      } catch { return false; }
-    };
-    const registerHandler = () => {
-      if (!config.events || handler === undefined) return;
-      try {
-        const clientCoordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:client-coordinator:v2"]);
-        if (typeof clientCoordinatorKey !== "symbol") return;
-        const clientCoordinator = Reflect.get(root, clientCoordinatorKey);
-        const register = (typeof clientCoordinator === "object" || typeof clientCoordinator === "function") && clientCoordinator !== null
-          ? Reflect.get(clientCoordinator, "register")
-          : undefined;
-        if (typeof register !== "function" || Reflect.get(clientCoordinator, "runtimeToken") !== config.runtimeToken) return;
-        Reflect.apply(register, clientCoordinator, ["plausible", handler, config.runtimeToken]);
-      } catch {}
-    };
-    const readHref = () => {
-      if (!isLocationAllowed()) return undefined;
-      try {
-        const href = Reflect.get(Reflect.get(root, "location"), "href");
-        return typeof href === "string" ? href : undefined;
+        const url = String(root.location.href);
+        const title = typeof documentValue.title === "string" ? documentValue.title : "";
+        let referrer = previous?.url;
+        if (referrer === undefined && typeof documentValue.referrer === "string" &&
+            documentValue.referrer !== "" && allowsUrl(documentValue.referrer)) referrer = documentValue.referrer;
+        return Object.freeze({ url, title, referrer: referrer ?? "" });
       } catch { return undefined; }
     };
-    const isPrerendering = () => {
-      try { return Reflect.get(documentValue, "prerendering") === true; } catch { return false; }
-    };
-    const matchesConfiguredScript = () => {
-      try {
-        const script = vendorScript;
-        if ((typeof script !== "object" && typeof script !== "function") || script === null ||
-            Reflect.get(script, "ownerDocument") !== documentValue ||
-            Reflect.get(script, "id") !== scriptId || Reflect.get(script, "tagName") !== "SCRIPT" ||
-            Reflect.get(script, "src") !== config.scriptSrc || Reflect.get(script, "async") !== true ||
-            Reflect.get(script, "defer") !== false || Reflect.get(script, "noModule") !== false ||
-            Reflect.get(script, "type") !== "") return false;
-        const getAttribute = Reflect.get(script, "getAttribute");
-        const getAttributeNames = Reflect.get(script, "getAttributeNames");
-        const getElementById = Reflect.get(documentValue, "getElementById");
-        if (typeof getAttribute !== "function" || typeof getAttributeNames !== "function" ||
-            typeof getElementById !== "function" ||
-            Reflect.apply(getAttribute, script, ["data-cwl-astro-analytics"]) !== "plausible-v1") return false;
-        const connected = Reflect.get(script, "isConnected") === true;
-        const boundScript = Reflect.apply(getElementById, documentValue, [scriptId]);
-        if (connected ? boundScript !== script : boundScript !== null) return false;
-        const names = Reflect.apply(getAttributeNames, script, []);
-        if (!Array.isArray(names)) return false;
-        const dataNames = names.filter((name) => typeof name === "string" && name.startsWith("data-"));
-        return dataNames.length === 1 && dataNames[0] === "data-cwl-astro-analytics";
-      } catch { return false; }
-    };
-    const hasUsableVendor = () => {
-      try {
-        const plausible = Reflect.get(root, "plausible");
-        return vendorReady && matchesConfiguredScript() && plausible === vendorClient &&
-          typeof plausible === "function" && Reflect.get(plausible, "l") === true;
-      } catch { return false; }
-    };
-    const callPlausible = (name, options, referrer) => {
-      if (!isLocationAllowed() || !hasUsableVendor()) return false;
-      const plausible = vendorClient;
-      requestReferrer = referrer;
-      try {
-        Reflect.apply(plausible, root, options === undefined ? [name] : [name, options]);
-        return true;
-      } finally {
-        requestReferrer = undefined;
-      }
-    };
-    const sendPageview = (pageview) => {
-      try {
-        if (!isLocationAllowed() || !vendorReady || lifecycle?.active !== true || pageview === undefined ||
-            pageview.completion === lastTrackedCompletion) {
-          return pageview?.completion === lastTrackedCompletion;
-        }
-        if (!callPlausible("pageview", { url: pageview.url }, pageview.referrer)) return false;
-        lastTrackedCompletion = pageview.completion;
-        return true;
-      } catch { return false; }
-    };
-    const flushPageview = () => {
-      if (lifecycle?.active !== true || isPrerendering()) return;
-      const href = readHref();
-      const pending = pendingPageview;
-      if (pending !== undefined && pending.url === href) {
-        if (sendPageview(pending)) pendingPageview = undefined;
-      }
-    };
-    const run = (nextConfig) => {
-      let cleanup;
-      let generation;
-      let lifecycleActive = false;
-      try {
-        if (!sameConfig(nextConfig)) return;
-        if (activeConfig !== undefined) {
-          if (lifecycle?.active === true) {
-            registerHandler();
-            if (vendorReady && !isPrerendering()) flushPageview();
-            return;
-          }
-          activeConfig = undefined;
-        }
-        activeConfig = nextConfig;
-        generation = ++generationCounter;
-        activeGeneration = generation;
-        vendorReady = false;
-        vendorClient = undefined;
-        pendingPageview = typeof completedNavigationUrl === "string"
-          ? Object.freeze({
-              completion: completionCounter,
-              referrer: completedNavigationReferrer,
-              url: completedNavigationUrl,
-            })
-          : undefined;
-        lifecycleActive = true;
-        lifecycle = Object.freeze({ get active() { return lifecycleActive; } });
-        const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
-        handler = Object.freeze({
-          __astroAnalyticsBrand: brand,
-          __astroAnalyticsProvider: "plausible",
-          status() {
-            if (activeGeneration !== generation || lifecycle.active !== true) return "adapter-not-loaded";
-            if (consentPending) return "consent-pending";
-            return hasUsableVendor() ? "ready" : "adapter-not-loaded";
-          },
-          track(name, properties) {
-            try {
-              if (activeGeneration !== generation || lifecycle.active !== true || !vendorReady) {
-                return { ok: false, reason: consentPending ? "consent-pending" : "adapter-not-loaded" };
-              }
-              if (properties !== undefined && Reflect.ownKeys(properties).length > 30) {
-                return { ok: false, reason: "invalid-event" };
-              }
-              let options;
-              if (properties !== undefined) {
-                const props = Object.create(null);
-                for (const key of Reflect.ownKeys(properties)) {
-                  Reflect.defineProperty(props, key, {
-                    configurable: false,
-                    enumerable: true,
-                    value: String(Reflect.get(properties, key)),
-                    writable: false,
-                  });
-                }
-                options = { props: Object.freeze(props) };
-              }
-              return callPlausible(name, options)
-                ? { ok: true }
-                : { ok: false, reason: "adapter-not-loaded" };
-            } catch { return { ok: false, reason: "adapter-not-loaded" }; }
-          }
-        });
-        registerHandler();
-        if (consentPending) return;
-
-        const getElementById = Reflect.get(documentValue, "getElementById");
-        const createElement = Reflect.get(documentValue, "createElement");
-        const head = Reflect.get(documentValue, "head");
-        if (typeof getElementById !== "function" || typeof createElement !== "function" ||
-            (typeof head !== "object" && typeof head !== "function") || head === null) {
-          lifecycleActive = false;
-          return;
-        }
-        const occupied = Reflect.apply(getElementById, documentValue, [scriptId]);
-        if (occupied !== null && occupied !== undefined) {
-          lifecycleActive = false;
-          return;
-        }
-        const previousDescriptor = Reflect.getOwnPropertyDescriptor(root, "plausible");
-        if (previousDescriptor !== undefined) {
-          lifecycleActive = false;
-          return;
-        }
-        let script;
-        script = Reflect.apply(createElement, documentValue, ["script"]);
-        vendorScript = script;
-        Reflect.set(script, "id", scriptId);
-        Reflect.set(script, "src", config.scriptSrc);
-        Reflect.set(script, "async", true);
-        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-cwl-astro-analytics", "plausible-v1"]);
-        const queue = [];
-        const stub = function(...args) { queue.push(args); };
-        Reflect.defineProperty(stub, "q", { configurable: true, enumerable: true, value: queue, writable: true });
-        Reflect.defineProperty(stub, "init", {
-          configurable: true,
-          enumerable: true,
-          value: function(initOptions) { Reflect.set(stub, "o", initOptions || {}); },
-          writable: true,
-        });
-        const initOptions = {
-          autoCapturePageviews: false,
-          captureOnLocalhost: config.captureOnLocalhost === true,
-          ...(typeof config.endpoint === "string" ? { endpoint: config.endpoint } : {}),
-          transformRequest(payload) {
-            if ((typeof payload === "object" || typeof payload === "function") && payload !== null) {
-              if (typeof requestReferrer === "string") Reflect.set(payload, "r", requestReferrer);
-              else {
-                const referrer = Reflect.get(payload, "r");
-                if (typeof referrer === "string" && !isUrlAllowed(referrer)) Reflect.set(payload, "r", "");
-              }
-            }
-            return payload;
-          },
-        };
-        Reflect.apply(Reflect.get(stub, "init"), stub, [initOptions]);
-        let bindingValue = stub;
-        let capturedVendor;
-        const bindingGet = () => bindingValue;
-        const bindingSet = (value) => {
-          bindingValue = value;
-          try {
-            if (Reflect.get(documentValue, "currentScript") === script && matchesConfiguredScript()) {
-              capturedVendor = value;
-            }
-          } catch {}
-        };
-        if (Reflect.defineProperty(root, "plausible", {
-          configurable: true, enumerable: true, get: bindingGet, set: bindingSet
-        }) !== true) {
-          lifecycleActive = false;
-          return;
-        }
-        const bindingDescriptor = Reflect.getOwnPropertyDescriptor(root, "plausible");
-        if (bindingDescriptor?.get !== bindingGet || bindingDescriptor?.set !== bindingSet ||
-            Reflect.get(root, "plausible") !== stub) {
-          lifecycleActive = false;
-          return;
-        }
-        const releaseBinding = (ownedValue) => {
-          try {
-            const descriptor = Reflect.getOwnPropertyDescriptor(root, "plausible");
-            if (descriptor?.get !== bindingGet || descriptor?.set !== bindingSet) return;
-            const currentValue = bindingGet();
-            if (currentValue === ownedValue) Reflect.deleteProperty(root, "plausible");
-            else Reflect.defineProperty(root, "plausible", {
-              configurable: true, enumerable: true, value: currentValue, writable: true
-            });
-          } catch {}
-        };
-        const fail = () => {
-          if (activeGeneration !== generation || !lifecycleActive) return;
-          lifecycleActive = false;
-          activeGeneration = undefined;
-          activeConfig = undefined;
-          vendorReady = false;
-          pendingPageview = undefined;
-          navigationObservationGap = true;
-          completedNavigationReferrer = undefined;
-          completedNavigationUrl = undefined;
-          if (typeof pageLoadListener === "function") {
-            try {
-              const remove = Reflect.get(documentValue, "removeEventListener");
-              if (typeof remove === "function") Reflect.apply(remove, documentValue, ["astro:page-load", pageLoadListener]);
-            } catch {}
-          }
-          try {
-            if ((typeof script === "object" || typeof script === "function") && script !== null) {
-              const remove = Reflect.get(script, "remove");
-              if (typeof remove === "function") Reflect.apply(remove, script, []);
-            }
-          } catch {}
-          releaseBinding(capturedVendor === undefined ? stub : capturedVendor);
-        };
-        cleanup = fail;
-        pageLoadListener = config.pageviews === "none" ? undefined : () => {
-          if (activeGeneration !== generation || lifecycle.active !== true) return;
-          const href = readHref();
-          if (typeof href !== "string") {
-            locationObservationGap = true;
-            pendingPageview = undefined;
-            completedNavigationReferrer = undefined;
-            completedNavigationUrl = undefined;
-            return;
-          }
-          const closesLocationGap = locationObservationGap;
-          const referrer = navigationObservationGap || closesLocationGap
-            ? ""
-            : typeof completedNavigationUrl === "string"
-              ? completedNavigationUrl
-              : (() => {
-                  try {
-                    const value = Reflect.get(documentValue, "referrer");
-                    return typeof value === "string" && isUrlAllowed(value) ? value : "";
-                  } catch { return ""; }
-                })();
-          navigationObservationGap = false;
-          locationObservationGap = false;
-          completedNavigationUrl = href;
-          completedNavigationReferrer = referrer;
-          const pageview = Object.freeze({ completion: ++completionCounter, referrer, url: href });
-          if (closesLocationGap) {
-            pendingPageview = undefined;
-            return;
-          }
-          pendingPageview = pageview;
-          if (vendorReady && !isPrerendering() && sendPageview(pageview)) pendingPageview = undefined;
-        };
-        if (typeof pageLoadListener === "function") {
-          const addEventListener = Reflect.get(documentValue, "addEventListener");
-          if (typeof addEventListener !== "function") { navigationObservationGap = true; fail(); return; }
-          try {
-            Reflect.apply(addEventListener, documentValue, ["astro:page-load", pageLoadListener]);
-          } catch { navigationObservationGap = true; fail(); return; }
-          if (startupPageLoadObserved()) {
-            navigationObservationGap = true;
-            locationObservationGap = true;
-            pageLoadListener();
-          }
-          const hasClientRouter = (() => {
-            try {
-              const querySelector = Reflect.get(documentValue, "querySelector");
-              return typeof querySelector === "function" &&
-                Reflect.apply(querySelector, documentValue, ['[name="astro-view-transitions-enabled"]']) !== null;
-            } catch { return true; }
-          })();
-          if (!hasClientRouter && !navigationObservationGap && typeof completedNavigationUrl !== "string") {
-            try {
-              const readyState = Reflect.get(documentValue, "readyState");
-              if (readyState === "interactive" || readyState === "complete") pageLoadListener();
-              else Reflect.apply(addEventListener, documentValue, ["DOMContentLoaded", pageLoadListener, { once: true }]);
-            } catch { navigationObservationGap = true; fail(); return; }
-          }
-        }
-        Reflect.apply(Reflect.get(script, "addEventListener"), script, ["load", () => {
-          try {
-            if (activeGeneration !== generation) return;
-            const plausible = Reflect.get(root, "plausible");
-            if (lifecycle.active !== true || !matchesConfiguredScript() || plausible !== capturedVendor ||
-                typeof plausible !== "function" || plausible === stub || Reflect.get(plausible, "l") !== true) {
-              fail();
-              return;
-            }
-            vendorClient = plausible;
-            vendorReady = true;
-            const descriptor = Reflect.getOwnPropertyDescriptor(root, "plausible");
-            if (descriptor?.get === bindingGet && descriptor?.set === bindingSet) {
-              Reflect.defineProperty(root, "plausible", {
-                configurable: true, enumerable: true, value: plausible, writable: true
-              });
-            }
-            if (config.pageviews !== "none") {
-              if (isPrerendering()) {
-                const addEventListener = Reflect.get(documentValue, "addEventListener");
-                if (typeof addEventListener !== "function") {
-                  fail();
-                  return;
-                }
-                Reflect.apply(addEventListener, documentValue, ["prerenderingchange", () => {
-                  if (activeGeneration === generation) flushPageview();
-                }, { once: true }]);
-              } else {
-                flushPageview();
-              }
-            }
-          } catch {
-            fail();
-          }
-        }, { once: true }]);
-        Reflect.apply(Reflect.get(script, "addEventListener"), script, ["error", fail, { once: true }]);
-        Reflect.apply(Reflect.get(head, "appendChild"), head, [script]);
-      } catch {
-        if (typeof cleanup === "function") {
-          cleanup();
-        } else if (activeGeneration === generation) {
-          lifecycleActive = false;
-          activeGeneration = undefined;
-          activeConfig = undefined;
-        }
-      }
-    };
-    const coordinator = Object.freeze({ run, runtimeToken: config.runtimeToken });
-    if (Reflect.defineProperty(documentValue, coordinatorKey, {
-      configurable: false, value: coordinator, writable: false
-    }) !== true || Reflect.get(documentValue, coordinatorKey) !== coordinator) return;
-    Reflect.apply(run, coordinator, [config]);
-  } catch {
-    // Provider failure must not prevent the page from rendering.
-  }
-})();`;
-}
-
-export function createGoogleAnalyticsBootstrapScript(
-  options: GoogleAnalyticsRuntimeOptions,
-): string {
-  const serializedOptions = serializeRuntimeOptions(options);
-  return `(() => {
-  "use strict";
-  const config = ${serializedOptions};
-  const brand = ${JSON.stringify(RUNTIME_CLIENT_BRAND)};
-  const scriptId = ${JSON.stringify(GOOGLE_ANALYTICS_SCRIPT_ID)};
-  try {
-    const root = globalThis;
-    const documentValue = Reflect.get(root, "document");
-    if ((typeof documentValue !== "object" && typeof documentValue !== "function") || documentValue === null) return;
-    const symbolValue = Reflect.get(root, "Symbol");
-    if ((typeof symbolValue !== "object" && typeof symbolValue !== "function") || symbolValue === null) return;
-    const symbolFor = Reflect.get(symbolValue, "for");
-    if (typeof symbolFor !== "function") return;
-    const coordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:google-analytics:v1"]);
-    if (typeof coordinatorKey !== "symbol") return;
-    const isLocationAllowed = () => {
-      if (config.locationPolicyRequired !== true) return true;
-      try {
-        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
-        if (typeof policyKey !== "symbol") return false;
-        const policy = Reflect.get(root, policyKey);
-        const allows = (typeof policy === "object" || typeof policy === "function") && policy !== null
-          ? Reflect.get(policy, "allowsCurrentLocation")
-          : undefined;
-        const keys = Reflect.ownKeys(policy);
-        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          keys.length === 6 && keys.includes("allowsUrl") && keys.includes("blockedQueryParameters") &&
-          keys.includes("setStartupPageLoadObserved") && keys.includes("startupPageLoadObserved") && typeof allows === "function" &&
-          Reflect.apply(allows, policy, []) === true;
-      } catch { return false; }
-    };
-    const isUrlAllowed = (value) => {
-      if (config.locationPolicyRequired !== true) return true;
-      try {
-        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
-        const policy = Reflect.get(root, policyKey);
-        const allows = Reflect.get(policy, "allowsUrl");
-        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          Reflect.ownKeys(policy).length === 6 && typeof allows === "function" &&
-          Reflect.apply(allows, policy, [value]) === true;
-      } catch { return false; }
-    };
-    const startupPageLoadObserved = () => {
-      if (config.locationPolicyRequired !== true) return false;
-      try {
-        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
-        const policy = Reflect.get(root, policyKey);
-        const observed = Reflect.get(policy, "startupPageLoadObserved");
-        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          Reflect.ownKeys(policy).length === 6 && typeof observed === "function" &&
-          Reflect.apply(observed, policy, []) === true;
-      } catch { return false; }
-    };
-    try {
-      const existingCoordinator = Reflect.get(documentValue, coordinatorKey);
-      if ((typeof existingCoordinator === "object" || typeof existingCoordinator === "function") && existingCoordinator !== null &&
-          Reflect.get(existingCoordinator, "runtimeToken") === config.runtimeToken) {
-        const keys = Reflect.ownKeys(existingCoordinator);
-        const existingRun = Reflect.get(existingCoordinator, "run");
-        if (keys.length === 2 && keys.includes("run") && keys.includes("runtimeToken") && typeof existingRun === "function") {
-          Reflect.apply(existingRun, existingCoordinator, [config]);
-        }
-        return;
-      }
-    } catch { return; }
-
-    let active = false;
-    let activeGeneration;
-    let generationCounter = 0;
-    let handler;
-    let vendorReady = false;
-    let vendorScript;
-    let ownedGtag;
-    let ownedDataLayer;
-    let pageLoadListener;
-    let completionCounter = 0;
-    let completedNavigationReferrer;
-    let completedNavigationTitle;
-    let completedNavigationUrl;
-    let lastTrackedCompletion;
-    let pendingPageview;
-    let navigationObservationGap = false;
-    let locationObservationGap = false;
-    const sameRecord = (left, right) => {
-      try {
-        if (left === undefined || right === undefined) return left === right;
-        if ((typeof left !== "object" && typeof left !== "function") || left === null ||
-            (typeof right !== "object" && typeof right !== "function") || right === null) return false;
-        const leftKeys = Reflect.ownKeys(left);
-        const rightKeys = Reflect.ownKeys(right);
-        return leftKeys.length === rightKeys.length && leftKeys.every((key) =>
-          typeof key === "string" && rightKeys.includes(key) && Reflect.get(left, key) === Reflect.get(right, key));
-      } catch { return false; }
-    };
-    const sameConfig = (value) => {
-      try {
-        return (typeof value === "object" || typeof value === "function") && value !== null &&
-          sameRecord(Reflect.get(value, "config"), config.config) &&
-          sameRecord(Reflect.get(value, "consentInitial"), config.consentInitial) &&
-          Reflect.get(value, "consentMode") === config.consentMode &&
-          Reflect.get(value, "events") === config.events &&
-          Reflect.get(value, "locationPolicyRequired") === config.locationPolicyRequired &&
-          Reflect.get(value, "measurementId") === config.measurementId &&
-          Reflect.get(value, "pageviews") === config.pageviews &&
-          Reflect.get(value, "runtimeToken") === config.runtimeToken &&
-          Reflect.get(value, "scriptSrc") === config.scriptSrc;
-      } catch { return false; }
-    };
-    const readHref = () => {
-      if (!isLocationAllowed()) return undefined;
-      try {
-        const href = Reflect.get(Reflect.get(root, "location"), "href");
-        return typeof href === "string" ? href : undefined;
-      } catch { return undefined; }
-    };
-    const isPrerendering = () => {
-      try { return Reflect.get(documentValue, "prerendering") === true; } catch { return false; }
-    };
-    const isValidGoogleName = (value) => {
-      try {
-        if (typeof value !== "string" || Array.from(value).length > 40 ||
-            !/^[\\p{L}][\\p{L}\\p{N}_]*$/u.test(value)) return false;
-        const normalized = value.toLowerCase();
-        return !["firebase_", "ga_", "google_"].some((prefix) => normalized.startsWith(prefix));
-      } catch { return false; }
-    };
-    const matchesConfiguredScript = () => {
-      try {
-        const script = vendorScript;
-        if ((typeof script !== "object" && typeof script !== "function") || script === null ||
-            Reflect.get(script, "ownerDocument") !== documentValue || Reflect.get(script, "id") !== scriptId ||
-            Reflect.get(script, "tagName") !== "SCRIPT" || Reflect.get(script, "src") !== config.scriptSrc ||
-            Reflect.get(script, "async") !== true || Reflect.get(script, "defer") !== false ||
-            Reflect.get(script, "noModule") !== false || Reflect.get(script, "type") !== "") return false;
-        const getAttribute = Reflect.get(script, "getAttribute");
-        const getAttributeNames = Reflect.get(script, "getAttributeNames");
-        const getElementById = Reflect.get(documentValue, "getElementById");
-        if (typeof getAttribute !== "function" || typeof getAttributeNames !== "function" ||
-            typeof getElementById !== "function" ||
-            Reflect.apply(getAttribute, script, ["data-cwl-astro-analytics"]) !== "google-analytics-v1" ||
-            Reflect.apply(getAttribute, script, ["data-measurement-id"]) !== config.measurementId) return false;
-        const connected = Reflect.get(script, "isConnected") === true;
-        const boundScript = Reflect.apply(getElementById, documentValue, [scriptId]);
-        if (connected ? boundScript !== script : boundScript !== null) return false;
-        const names = Reflect.apply(getAttributeNames, script, []);
-        if (!Array.isArray(names)) return false;
-        const dataNames = names.filter((name) => typeof name === "string" && name.startsWith("data-"));
-        return dataNames.length === 2 && dataNames.includes("data-cwl-astro-analytics") &&
-          dataNames.includes("data-measurement-id");
-      } catch { return false; }
-    };
-    const callGtag = (...args) => {
-      try {
-        const gtag = Reflect.get(root, "gtag");
-        const dataLayer = Reflect.get(root, "dataLayer");
-        if (!isLocationAllowed() || !vendorReady || !matchesConfiguredScript() || gtag !== ownedGtag || dataLayer !== ownedDataLayer ||
-            typeof gtag !== "function" || !Array.isArray(dataLayer)) return false;
-        Reflect.apply(gtag, root, args);
-        return true;
-      } catch { return false; }
-    };
-    const sendPageview = (pageview, generation) => {
-      if (!isLocationAllowed() || !active || activeGeneration !== generation || pageview === undefined ||
-          pageview.completion === lastTrackedCompletion) {
-        return pageview?.completion === lastTrackedCompletion;
-      }
-      const href = pageview.url;
-      const parameters = Object.create(null);
-      Reflect.defineProperty(parameters, "page_location", {
-        configurable: false, enumerable: true, value: href, writable: false,
-      });
-      const title = pageview.title;
-      if (typeof title === "string") Reflect.defineProperty(parameters, "page_title", {
-        configurable: false, enumerable: true, value: title, writable: false,
-      });
-      const referrer = pageview.referrer;
-      if (typeof referrer === "string") Reflect.defineProperty(parameters, "page_referrer", {
-        configurable: false, enumerable: true, value: referrer, writable: false,
-      });
-      Reflect.defineProperty(parameters, "send_to", {
-        configurable: false, enumerable: true, value: config.measurementId, writable: false,
-      });
-      if (callGtag("event", "page_view", parameters)) {
-        lastTrackedCompletion = pageview.completion;
-        return true;
-      }
-      return false;
-    };
-    const flushPageview = (generation) => {
-      if (config.pageviews === "none" || navigationObservationGap ||
-          !active || activeGeneration !== generation || isPrerendering()) return;
-      const href = readHref();
-      const pending = pendingPageview;
-      if (pending !== undefined && pending.url === href) {
-        if (sendPageview(pending, generation)) pendingPageview = undefined;
-      }
-    };
-    const registerHandler = () => {
-      if (!config.events || handler === undefined) return;
-      try {
-        const clientCoordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:client-coordinator:v2"]);
-        if (typeof clientCoordinatorKey !== "symbol") return;
-        const clientCoordinator = Reflect.get(root, clientCoordinatorKey);
-        const register = (typeof clientCoordinator === "object" || typeof clientCoordinator === "function") && clientCoordinator !== null
-          ? Reflect.get(clientCoordinator, "register")
-          : undefined;
-        if (typeof register !== "function" || Reflect.get(clientCoordinator, "runtimeToken") !== config.runtimeToken) return;
-        Reflect.apply(register, clientCoordinator, ["google-analytics", handler, config.runtimeToken]);
-      } catch {}
-    };
-    const run = (nextConfig) => {
-      if (!sameConfig(nextConfig)) return;
-      if (active) {
-        registerHandler();
-        if (vendorReady && typeof activeGeneration === "number" && !isPrerendering()) {
-          flushPageview(activeGeneration);
-        }
-        return;
-      }
-      const generation = ++generationCounter;
-      activeGeneration = generation;
-      vendorReady = false;
-      pendingPageview = typeof completedNavigationUrl === "string"
-        ? Object.freeze({
-            completion: completionCounter,
-            referrer: completedNavigationReferrer,
-            title: completedNavigationTitle,
-            url: completedNavigationUrl,
-          })
-        : undefined;
-      const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
-      handler = Object.freeze({
-        __astroAnalyticsBrand: brand,
-        __astroAnalyticsProvider: "google-analytics",
-        status() {
+    let active = true;
+    let ready = false;
+    let script: any;
+    let route: any;
+    let pending: any;
+    let inFlight = false;
+    const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
+    const state = { identity: JSON.stringify(config), register, refresh: () => flush(), runtimeToken: config.runtimeToken };
+    const handler = Object.freeze({
+      __astroAnalyticsBrand: brand,
+      __astroAnalyticsProvider: adapter.name,
+      status() {
+        try {
           if (consentPending) return "consent-pending";
-          return activeGeneration === generation && active && vendorReady && matchesConfiguredScript() && Reflect.get(root, "gtag") === ownedGtag &&
-            Reflect.get(root, "dataLayer") === ownedDataLayer ? "ready" : "adapter-not-loaded";
-        },
-        track(name, properties) {
-          try {
-            if (consentPending) return { ok: false, reason: "consent-pending" };
-            if (activeGeneration !== generation || !active || !vendorReady) return { ok: false, reason: "adapter-not-loaded" };
-            if (properties !== undefined && Reflect.ownKeys(properties).length > 25) {
-              return { ok: false, reason: "invalid-event" };
-            }
-            if (!isValidGoogleName(name)) {
-              return { ok: false, reason: "invalid-event" };
-            }
-            if (properties !== undefined && Object.prototype.hasOwnProperty.call(properties, "send_to")) {
-              return { ok: false, reason: "invalid-event" };
-            }
-            const parameters = Object.create(null);
-            if (properties !== undefined) {
-              for (const key of Reflect.ownKeys(properties)) {
-                const value = Reflect.get(properties, key);
-                if (!isValidGoogleName(key) ||
-                    (typeof value === "string" && Array.from(value).length > 100)) {
-                  return { ok: false, reason: "invalid-event" };
-                }
-                Reflect.defineProperty(parameters, key, {
-                  configurable: false, enumerable: true,
-                  value, writable: false,
-                });
-              }
-            }
-            Reflect.defineProperty(parameters, "send_to", {
-              configurable: false, enumerable: true, value: config.measurementId, writable: false,
-            });
-            return callGtag("event", name, parameters)
-              ? { ok: true }
-              : { ok: false, reason: "adapter-not-loaded" };
-          } catch { return { ok: false, reason: "adapter-not-loaded" }; }
-        }
-      });
-      registerHandler();
-      if (consentPending) return;
-
-      let localDataLayer;
-      let localGtag;
-      let localPageLoadListener;
-      let localScript;
-      const cleanup = () => {
-        if (activeGeneration !== generation) return;
-        active = false;
-        activeGeneration = undefined;
-        vendorReady = false;
-        pendingPageview = undefined;
-        navigationObservationGap = true;
-        completedNavigationReferrer = undefined;
-        completedNavigationTitle = undefined;
-        completedNavigationUrl = undefined;
-        if (typeof localPageLoadListener === "function") {
-          try {
-            const remove = Reflect.get(documentValue, "removeEventListener");
-            if (typeof remove === "function") Reflect.apply(remove, documentValue, ["astro:page-load", localPageLoadListener]);
-          } catch {}
-        }
+          return active && ready && adapter.ready(root, config) ? "ready" : "adapter-not-loaded";
+        } catch { return "adapter-not-loaded"; }
+      },
+      track(name: string, properties?: Record<string, string | number | boolean>) {
         try {
-          if ((typeof localScript === "object" || typeof localScript === "function") && localScript !== null) {
-            const remove = Reflect.get(localScript, "remove");
-            if (typeof remove === "function") Reflect.apply(remove, localScript, []);
-          }
-        } catch {}
-        try { if (Reflect.get(root, "gtag") === localGtag) Reflect.deleteProperty(root, "gtag"); } catch {}
-        try { if (Reflect.get(root, "dataLayer") === localDataLayer) Reflect.deleteProperty(root, "dataLayer"); } catch {}
-      };
-      try {
-        const getElementById = Reflect.get(documentValue, "getElementById");
-        const createElement = Reflect.get(documentValue, "createElement");
-        const head = Reflect.get(documentValue, "head");
-        if (typeof getElementById !== "function" || typeof createElement !== "function" ||
-            (typeof head !== "object" && typeof head !== "function") || head === null) return;
-        const occupied = Reflect.apply(getElementById, documentValue, [scriptId]);
-        if (occupied !== null && occupied !== undefined) return;
-        if (Reflect.getOwnPropertyDescriptor(root, "gtag") !== undefined ||
-            Reflect.getOwnPropertyDescriptor(root, "dataLayer") !== undefined) return;
-
-        const dataLayer = [];
-        const gtag = function() { dataLayer.push(arguments); };
-        localDataLayer = dataLayer;
-        ownedDataLayer = dataLayer;
-        if (Reflect.defineProperty(root, "dataLayer", {
-          configurable: true, enumerable: true, value: dataLayer, writable: true
-        }) !== true || Reflect.get(root, "dataLayer") !== dataLayer) {
-          cleanup();
-          return;
+          if (consentPending) return { ok: false, reason: "consent-pending" };
+          if (!active || !ready || !locationAllowed() || !adapter.ready(root, config))
+            return { ok: false, reason: "adapter-not-loaded" };
+          return adapter.event(root, name, properties, route, config);
         }
-        localGtag = gtag;
-        ownedGtag = gtag;
-        if (Reflect.defineProperty(root, "gtag", {
-          configurable: true, enumerable: true, value: gtag, writable: true
-        }) !== true || Reflect.get(root, "gtag") !== gtag) {
-          cleanup();
-          return;
-        }
-        if (config.consentInitial !== undefined) {
-          const initial = Object.create(null);
-          const mappings = [
-            ["analyticsStorage", "analytics_storage"],
-            ["adStorage", "ad_storage"],
-            ["adUserData", "ad_user_data"],
-            ["adPersonalization", "ad_personalization"],
-          ];
-          for (const [source, destination] of mappings) {
-            const value = Reflect.get(config.consentInitial, source);
-            if (value !== undefined) Reflect.defineProperty(initial, destination, {
-              configurable: false, enumerable: true, value, writable: false,
-            });
-          }
-          Reflect.apply(gtag, root, ["consent", "default", initial]);
-        }
-        Reflect.apply(gtag, root, ["js", new Date()]);
-        const providerConfig = Object.create(null);
-        if (config.config !== undefined) {
-          for (const key of Reflect.ownKeys(config.config)) {
-            if (typeof key === "string" && key !== "send_page_view") {
-              Reflect.defineProperty(providerConfig, key, {
-                configurable: false, enumerable: true,
-                value: Reflect.get(config.config, key), writable: false,
-              });
-            }
-          }
-        }
-        Reflect.defineProperty(providerConfig, "send_page_view", {
-          configurable: false, enumerable: true, value: false, writable: false,
-        });
-        try {
-          const documentReferrer = Reflect.get(documentValue, "referrer");
-          if (typeof documentReferrer === "string" && !isUrlAllowed(documentReferrer)) {
-            Reflect.defineProperty(providerConfig, "page_referrer", {
-              configurable: false, enumerable: true, value: "", writable: false,
-            });
-          }
-        } catch {
-          Reflect.defineProperty(providerConfig, "page_referrer", {
-            configurable: false, enumerable: true, value: "", writable: false,
-          });
-        }
-        Reflect.apply(gtag, root, ["config", config.measurementId, providerConfig]);
-
-        const script = Reflect.apply(createElement, documentValue, ["script"]);
-        localScript = script;
-        vendorScript = script;
-        Reflect.set(script, "id", scriptId);
-        Reflect.set(script, "src", config.scriptSrc);
-        Reflect.set(script, "async", true);
-        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-cwl-astro-analytics", "google-analytics-v1"]);
-        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-measurement-id", config.measurementId]);
-        localPageLoadListener = config.pageviews === "none" ? undefined : () => {
-          if (activeGeneration !== generation) return;
-          const href = readHref();
-          if (typeof href !== "string") {
-            locationObservationGap = true;
-            pendingPageview = undefined;
-            completedNavigationReferrer = undefined;
-            completedNavigationTitle = undefined;
-            completedNavigationUrl = undefined;
-            return;
-          }
-          const closesLocationGap = locationObservationGap;
-          const referrer = navigationObservationGap || closesLocationGap
-            ? ""
-            : typeof completedNavigationUrl === "string"
-              ? completedNavigationUrl
-              : (() => {
-                  try {
-                    const value = Reflect.get(documentValue, "referrer");
-                    return typeof value === "string" && isUrlAllowed(value) ? value : "";
-                  } catch { return ""; }
-                })();
-          navigationObservationGap = false;
-          locationObservationGap = false;
-          completedNavigationReferrer = referrer;
-          completedNavigationUrl = href;
-          try {
-            const value = Reflect.get(documentValue, "title");
-            completedNavigationTitle = typeof value === "string" ? value : undefined;
-          } catch { completedNavigationTitle = undefined; }
-          const pageview = Object.freeze({
-            completion: ++completionCounter,
-            referrer,
-            title: completedNavigationTitle,
-            url: href,
-          });
-          if (closesLocationGap) {
-            pendingPageview = undefined;
-            return;
-          }
-          pendingPageview = pageview;
-          if (active && vendorReady && !isPrerendering() && sendPageview(pageview, generation)) pendingPageview = undefined;
-        };
-        pageLoadListener = localPageLoadListener;
-        if (typeof localPageLoadListener === "function") {
-          const addEventListener = Reflect.get(documentValue, "addEventListener");
-          if (typeof addEventListener !== "function") { navigationObservationGap = true; cleanup(); return; }
-          try {
-            Reflect.apply(addEventListener, documentValue, ["astro:page-load", localPageLoadListener]);
-          } catch { navigationObservationGap = true; cleanup(); return; }
-          if (startupPageLoadObserved()) {
-            navigationObservationGap = true;
-            locationObservationGap = true;
-            localPageLoadListener();
-          }
-          const hasClientRouter = (() => {
-            try {
-              const querySelector = Reflect.get(documentValue, "querySelector");
-              return typeof querySelector === "function" &&
-                Reflect.apply(querySelector, documentValue, ['[name="astro-view-transitions-enabled"]']) !== null;
-            } catch { return true; }
-          })();
-          if (!hasClientRouter && !navigationObservationGap && typeof completedNavigationUrl !== "string") {
-            try {
-              const readyState = Reflect.get(documentValue, "readyState");
-              if (readyState === "interactive" || readyState === "complete") localPageLoadListener();
-              else Reflect.apply(addEventListener, documentValue, ["DOMContentLoaded", localPageLoadListener, { once: true }]);
-            } catch { navigationObservationGap = true; cleanup(); return; }
-          }
-        }
-        active = true;
-        Reflect.apply(Reflect.get(script, "addEventListener"), script, ["load", () => {
-          try {
-            if (!active || activeGeneration !== generation || !matchesConfiguredScript() || Reflect.get(root, "gtag") !== localGtag ||
-                Reflect.get(root, "dataLayer") !== localDataLayer) {
-              cleanup();
-              return;
-            }
-            vendorReady = true;
-            if (config.pageviews !== "none") {
-              if (isPrerendering()) {
-                const addEventListener = Reflect.get(documentValue, "addEventListener");
-                if (typeof addEventListener !== "function") { cleanup(); return; }
-                Reflect.apply(addEventListener, documentValue, ["prerenderingchange", () => {
-                  try { flushPageview(generation); } catch { cleanup(); }
-                }, { once: true }]);
-              } else {
-                flushPageview(generation);
-              }
-            }
-          } catch {
-            cleanup();
-          }
-        }, { once: true }]);
-        Reflect.apply(Reflect.get(script, "addEventListener"), script, ["error", cleanup, { once: true }]);
-        Reflect.apply(Reflect.get(head, "appendChild"), head, [script]);
-      } catch {
-        cleanup();
-      }
-    };
-    const coordinator = Object.freeze({ run, runtimeToken: config.runtimeToken });
-    if (Reflect.defineProperty(documentValue, coordinatorKey, {
-      configurable: false, value: coordinator, writable: false
-    }) !== true || Reflect.get(documentValue, coordinatorKey) !== coordinator) return;
-    Reflect.apply(run, coordinator, [config]);
-  } catch {
-    // Provider failure must not prevent the page from rendering.
-  }
-})();`;
-}
-
-export function createMatomoBootstrapScript(
-  options: MatomoRuntimeOptions,
-): string {
-  const serializedOptions = serializeRuntimeOptions(options);
-  return `(() => {
-  "use strict";
-  const config = ${serializedOptions};
-  const brand = ${JSON.stringify(RUNTIME_CLIENT_BRAND)};
-  const scriptId = ${JSON.stringify(MATOMO_SCRIPT_ID)};
-  try {
-    const root = globalThis;
-    const documentValue = Reflect.get(root, "document");
-    if ((typeof documentValue !== "object" && typeof documentValue !== "function") || documentValue === null) return;
-    const symbolValue = Reflect.get(root, "Symbol");
-    if ((typeof symbolValue !== "object" && typeof symbolValue !== "function") || symbolValue === null) return;
-    const symbolFor = Reflect.get(symbolValue, "for");
-    if (typeof symbolFor !== "function") return;
-    const coordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:matomo:v1"]);
-    if (typeof coordinatorKey !== "symbol") return;
-    const isLocationAllowed = () => {
-      if (config.locationPolicyRequired !== true) return true;
+        catch { return { ok: false, reason: "adapter-not-loaded" }; }
+      },
+    });
+    function register() {
       try {
-        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
-        if (typeof policyKey !== "symbol") return false;
-        const policy = Reflect.get(root, policyKey);
-        const allows = (typeof policy === "object" || typeof policy === "function") && policy !== null
-          ? Reflect.get(policy, "allowsCurrentLocation")
-          : undefined;
-        const keys = Reflect.ownKeys(policy);
-        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          keys.length === 6 && keys.includes("allowsUrl") && keys.includes("blockedQueryParameters") &&
-          keys.includes("setStartupPageLoadObserved") && keys.includes("startupPageLoadObserved") && typeof allows === "function" &&
-          Reflect.apply(allows, policy, []) === true;
-      } catch { return false; }
-    };
-    const isUrlAllowed = (value) => {
-      if (config.locationPolicyRequired !== true) return true;
-      try {
-        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
-        const policy = Reflect.get(root, policyKey);
-        const allows = Reflect.get(policy, "allowsUrl");
-        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          Reflect.ownKeys(policy).length === 6 && typeof allows === "function" &&
-          Reflect.apply(allows, policy, [value]) === true;
-      } catch { return false; }
-    };
-    const startupPageLoadObserved = () => {
-      if (config.locationPolicyRequired !== true) return false;
-      try {
-        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
-        const policy = Reflect.get(root, policyKey);
-        const observed = Reflect.get(policy, "startupPageLoadObserved");
-        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          Reflect.ownKeys(policy).length === 6 && typeof observed === "function" &&
-          Reflect.apply(observed, policy, []) === true;
-      } catch { return false; }
-    };
-    try {
-      const existingCoordinator = Reflect.get(documentValue, coordinatorKey);
-      if ((typeof existingCoordinator === "object" || typeof existingCoordinator === "function") && existingCoordinator !== null &&
-          Reflect.get(existingCoordinator, "runtimeToken") === config.runtimeToken) {
-        const keys = Reflect.ownKeys(existingCoordinator);
-        const existingRun = Reflect.get(existingCoordinator, "run");
-        if (keys.length === 2 && keys.includes("run") && keys.includes("runtimeToken") && typeof existingRun === "function") {
-          Reflect.apply(existingRun, existingCoordinator, [config]);
-        }
-        return;
-      }
-    } catch { return; }
-
-    let active = false;
-    let activeGeneration;
-    let generationCounter = 0;
-    let handler;
-    let ownedMatomo;
-    let ownedQueue;
-    let vendorLoadProven = false;
-    let vendorReady = false;
-    let vendorScript;
-    let navigationObservationGap = false;
-    let suppressNextCompletionPageview = false;
-    let navigationObserverInstalled = false;
-    let initialDocumentScheduled = false;
-    let completedNavigationCompletion = 0;
-    let lastTrackedCompletion;
-    let lastTrackedNavigationUrl;
-    let vendorContextCompletion;
-    let pendingPageviewUrl;
-    let pendingPageviewReferrer;
-    let pendingPageviewCompletion;
-    let completedNavigationUrl;
-    let completedNavigationTitle;
-    let completedNavigationReferrer;
-    let completedNavigationIsBaseline = false;
-    const sameConfig = (value) => {
-      try {
-        return (typeof value === "object" || typeof value === "function") && value !== null &&
-          Reflect.get(value, "consentMode") === config.consentMode &&
-          Reflect.get(value, "eventCategory") === config.eventCategory &&
-          Reflect.get(value, "events") === config.events &&
-          Reflect.get(value, "locationPolicyRequired") === config.locationPolicyRequired &&
-          Reflect.get(value, "pageviews") === config.pageviews &&
-          Reflect.get(value, "runtimeToken") === config.runtimeToken &&
-          Reflect.get(value, "scriptSrc") === config.scriptSrc &&
-          Reflect.get(value, "siteId") === config.siteId &&
-          Reflect.get(value, "trackerUrl") === config.trackerUrl;
-      } catch { return false; }
-    };
-    const readHref = () => {
-      if (!isLocationAllowed()) return undefined;
-      try {
-        const href = Reflect.get(Reflect.get(root, "location"), "href");
-        return typeof href === "string" ? href : undefined;
-      } catch { return undefined; }
-    };
-    const readTitle = () => {
-      try {
-        const title = Reflect.get(documentValue, "title");
-        return typeof title === "string" ? title : undefined;
-      } catch { return undefined; }
-    };
-    const isPrerendering = () => {
-      try { return Reflect.get(documentValue, "prerendering") === true; } catch { return false; }
-    };
-    const hasClientRouter = () => {
-      try {
-        const querySelector = Reflect.get(documentValue, "querySelector");
-        return typeof querySelector === "function" &&
-          Reflect.apply(querySelector, documentValue, ['[name="astro-view-transitions-enabled"]']) !== null;
-      } catch { return true; }
-    };
-    const ensureNavigationObserver = () => {
-      if (navigationObserverInstalled) return true;
-      try {
-        const addEventListener = Reflect.get(documentValue, "addEventListener");
-        if (typeof addEventListener !== "function") {
-          navigationObservationGap = true;
-          return false;
-        }
-        Reflect.apply(addEventListener, documentValue, ["astro:page-load", recordCompletedNavigation]);
-        navigationObserverInstalled = true;
-        return true;
-      } catch {
-        navigationObservationGap = true;
-        return false;
-      }
-    };
-    const matchesConfiguredScript = () => {
-      try {
-        const script = vendorScript;
-        if ((typeof script !== "object" && typeof script !== "function") || script === null ||
-            Reflect.get(script, "ownerDocument") !== documentValue || Reflect.get(script, "id") !== scriptId ||
-            Reflect.get(script, "tagName") !== "SCRIPT" || Reflect.get(script, "src") !== config.scriptSrc ||
-            Reflect.get(script, "async") !== true || Reflect.get(script, "defer") !== false ||
-            Reflect.get(script, "noModule") !== false || Reflect.get(script, "type") !== "") return false;
-        const getAttribute = Reflect.get(script, "getAttribute");
-        const getAttributeNames = Reflect.get(script, "getAttributeNames");
-        const getElementById = Reflect.get(documentValue, "getElementById");
-        if (typeof getAttribute !== "function" || typeof getAttributeNames !== "function" ||
-            typeof getElementById !== "function" ||
-            Reflect.apply(getAttribute, script, ["data-cwl-astro-analytics"]) !== "matomo-v1" ||
-            Reflect.apply(getAttribute, script, ["data-site-id"]) !== config.siteId ||
-            Reflect.apply(getAttribute, script, ["data-tracker-url"]) !== config.trackerUrl) return false;
-        const connected = Reflect.get(script, "isConnected") === true;
-        const boundScript = Reflect.apply(getElementById, documentValue, [scriptId]);
-        if (connected ? boundScript !== script : boundScript !== null) return false;
-        const names = Reflect.apply(getAttributeNames, script, []);
-        if (!Array.isArray(names)) return false;
-        const dataNames = names.filter((name) => typeof name === "string" && name.startsWith("data-"));
-        return dataNames.length === 3 && dataNames.includes("data-cwl-astro-analytics") &&
-          dataNames.includes("data-site-id") && dataNames.includes("data-tracker-url");
-      } catch { return false; }
-    };
-    const matchesOwnedVendor = () => {
-      try {
-        if (!vendorLoadProven || !matchesConfiguredScript()) return false;
-        const queue = Reflect.get(root, "_paq");
-        const matomo = Reflect.get(root, "Matomo");
-        if (queue !== ownedQueue || matomo !== ownedMatomo ||
-            Reflect.get(root, "Piwik") !== ownedMatomo || Reflect.get(root, "AnalyticsTracker") !== ownedMatomo ||
-            (typeof queue !== "object" && typeof queue !== "function") || queue === null) return false;
-        const push = Reflect.get(queue, "push");
-        return typeof push === "function";
-      } catch { return false; }
-    };
-    const hasUsableVendor = () => vendorReady && matchesOwnedVendor();
-    const callQueue = (command) => {
-      try {
-        if (!isLocationAllowed() || !hasUsableVendor()) return false;
-        const queue = Reflect.get(root, "_paq");
-        const push = Reflect.get(queue, "push");
-        Reflect.apply(push, queue, [command]);
-        return true;
-      } catch {
-        vendorReady = false;
-        return false;
-      }
-    };
-    const queueBeforeReady = (queue, command) => {
-      try {
-        const push = Reflect.get(queue, "push");
-        if (typeof push !== "function") return false;
-        Reflect.apply(push, queue, [command]);
-        return true;
-      } catch { return false; }
-    };
-    const applyVendorContext = (href, referrer, title, completion) => {
-      if (typeof href !== "string") return false;
-      if (referrer === null) {
-        if (!callQueue(["setReferrerUrl", ""])) return false;
-      } else if (typeof referrer === "string" && !callQueue(["setReferrerUrl", referrer])) return false;
-      if (!callQueue(["setCustomUrl", href])) return false;
-      if (typeof title === "string" && !callQueue(["setDocumentTitle", title])) return false;
-      vendorContextCompletion = completion;
-      return true;
-    };
-    const sendPageview = (href, generation, explicitReferrer, explicitTitle, completion) => {
-      if (!active || activeGeneration !== generation || typeof href !== "string" ||
-          completion === lastTrackedCompletion) return completion === lastTrackedCompletion;
-      const referrerIsUnknown = explicitReferrer === null;
-      let referrer = referrerIsUnknown
-        ? null
-        : typeof explicitReferrer === "string" ? explicitReferrer : lastTrackedNavigationUrl;
-      if (!referrerIsUnknown && referrer === undefined) {
-        try {
-          const documentReferrer = Reflect.get(documentValue, "referrer");
-          if (typeof documentReferrer === "string" && documentReferrer !== "" && isUrlAllowed(documentReferrer)) {
-            referrer = documentReferrer;
-          }
-        } catch {}
-      }
-      const title = typeof explicitTitle === "string" ? explicitTitle : readTitle();
-      if (!applyVendorContext(href, referrer, title, completion)) return false;
-      if (callQueue(["trackPageView"])) {
-        lastTrackedCompletion = completion;
-        lastTrackedNavigationUrl = href;
-        return true;
-      }
-      return false;
-    };
-    const flushCompletedNavigation = (generation) => {
-      if (navigationObservationGap || !active || activeGeneration !== generation || isPrerendering()) return;
-      const href = readHref();
-      if (typeof completedNavigationUrl !== "string" || href !== completedNavigationUrl) return;
-      const pending = pendingPageviewUrl;
-      const pendingReferrer = pendingPageviewReferrer;
-      const pendingCompletion = pendingPageviewCompletion;
-      if (config.pageviews === "none" || typeof pending !== "string") {
-        if (vendorContextCompletion !== completedNavigationCompletion &&
-            !applyVendorContext(completedNavigationUrl, completedNavigationReferrer,
-              completedNavigationTitle, completedNavigationCompletion)) return;
-        pendingPageviewUrl = undefined;
-        pendingPageviewReferrer = undefined;
-        pendingPageviewCompletion = undefined;
-      } else if (pending === completedNavigationUrl) {
-        if (sendPageview(pending, generation, pendingReferrer, completedNavigationTitle, pendingCompletion)) {
-          pendingPageviewUrl = undefined;
-          pendingPageviewReferrer = undefined;
-          pendingPageviewCompletion = undefined;
-        }
-      }
-    };
-    const recordCompletedNavigation = () => {
-      const href = readHref();
-      if (typeof href !== "string") {
-        navigationObservationGap = true;
-        suppressNextCompletionPageview = true;
-        pendingPageviewUrl = undefined;
-        pendingPageviewReferrer = undefined;
-        pendingPageviewCompletion = undefined;
-        completedNavigationUrl = undefined;
-        completedNavigationTitle = undefined;
-        completedNavigationReferrer = undefined;
-        completedNavigationIsBaseline = false;
-        vendorContextCompletion = undefined;
-        return;
-      }
-      const closesObservationGap = navigationObservationGap;
-      completedNavigationReferrer = closesObservationGap ? null : completedNavigationUrl;
-      completedNavigationUrl = href;
-      completedNavigationCompletion += 1;
-      completedNavigationTitle = readTitle();
-      completedNavigationIsBaseline = closesObservationGap && suppressNextCompletionPageview;
-      suppressNextCompletionPageview = false;
-      pendingPageviewUrl = completedNavigationIsBaseline || config.pageviews === "none" ? undefined : href;
-      pendingPageviewReferrer = completedNavigationIsBaseline || config.pageviews === "none" ? undefined : completedNavigationReferrer;
-      pendingPageviewCompletion = completedNavigationIsBaseline || config.pageviews === "none" ? undefined : completedNavigationCompletion;
-      if (closesObservationGap) {
-        navigationObservationGap = false;
-        if (active && typeof activeGeneration === "number" && vendorReady &&
-            applyVendorContext(completedNavigationUrl, completedNavigationReferrer,
-              completedNavigationTitle, completedNavigationCompletion)) {
-          pendingPageviewUrl = undefined;
-          pendingPageviewReferrer = undefined;
-          pendingPageviewCompletion = undefined;
-        }
-        try { run(config); } catch {}
-        return;
-      }
-      if (active && typeof activeGeneration === "number" && vendorReady) {
-        flushCompletedNavigation(activeGeneration);
-      }
-    };
-    const registerHandler = () => {
-      if (!config.events || handler === undefined) return;
-      try {
-        const clientCoordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:client-coordinator:v2"]);
-        if (typeof clientCoordinatorKey !== "symbol") return;
-        const clientCoordinator = Reflect.get(root, clientCoordinatorKey);
-        const register = (typeof clientCoordinator === "object" || typeof clientCoordinator === "function") && clientCoordinator !== null
-          ? Reflect.get(clientCoordinator, "register")
-          : undefined;
-        if (typeof register !== "function" || Reflect.get(clientCoordinator, "runtimeToken") !== config.runtimeToken) return;
-        Reflect.apply(register, clientCoordinator, ["matomo", handler, config.runtimeToken]);
+        const coordinator = root[Symbol.for("codeworkslabs.astro-analytics:client-coordinator:v3")];
+        coordinator?.register(adapter.name, handler, config.runtimeToken);
       } catch {}
-    };
-    const run = (nextConfig) => {
-      if (!sameConfig(nextConfig)) return;
-      if (!ensureNavigationObserver()) {
-        registerHandler();
-        return;
-      }
-      if (startupPageLoadObserved() && typeof completedNavigationUrl !== "string") {
-        navigationObservationGap = true;
-        suppressNextCompletionPageview = true;
-        recordCompletedNavigation();
-      }
-      if (!hasClientRouter() && !navigationObservationGap && typeof completedNavigationUrl !== "string" && !initialDocumentScheduled) {
-        initialDocumentScheduled = true;
-        try {
-          const readyState = Reflect.get(documentValue, "readyState");
-          if (readyState === "interactive" || readyState === "complete") recordCompletedNavigation();
-          else {
-            const addEventListener = Reflect.get(documentValue, "addEventListener");
-            Reflect.apply(addEventListener, documentValue, ["DOMContentLoaded", recordCompletedNavigation, { once: true }]);
-          }
-        } catch {
-          navigationObservationGap = true;
-          registerHandler();
-          return;
-        }
-      }
-      if (navigationObservationGap) {
-        registerHandler();
-        return;
-      }
-      if (active) {
-        if (!vendorReady && matchesOwnedVendor()) {
-          vendorReady = true;
-          flushCompletedNavigation(activeGeneration);
-        }
-        registerHandler();
-        return;
-      }
-      const generation = ++generationCounter;
-      activeGeneration = generation;
-      vendorLoadProven = false;
-      vendorReady = false;
-      vendorContextCompletion = undefined;
-      pendingPageviewUrl = completedNavigationIsBaseline || config.pageviews === "none"
-        ? undefined : completedNavigationUrl;
-      pendingPageviewReferrer = completedNavigationIsBaseline || config.pageviews === "none"
-        ? undefined : completedNavigationReferrer;
-      pendingPageviewCompletion = completedNavigationIsBaseline || config.pageviews === "none"
-        ? undefined : completedNavigationCompletion;
-      const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
-      handler = Object.freeze({
-        __astroAnalyticsBrand: brand,
-        __astroAnalyticsProvider: "matomo",
-        status() {
-          if (consentPending) return "consent-pending";
-          return activeGeneration === generation && active && hasUsableVendor()
-            ? "ready"
-            : "adapter-not-loaded";
-        },
-        track(name, properties) {
-          try {
-            if (consentPending) return { ok: false, reason: "consent-pending" };
-            if (activeGeneration !== generation || !active || !hasUsableVendor()) {
-              return { ok: false, reason: "adapter-not-loaded" };
-            }
-            if (config.pageviews === "none" && typeof completedNavigationUrl === "string" &&
-                vendorContextCompletion !== completedNavigationCompletion &&
-                !applyVendorContext(completedNavigationUrl, completedNavigationReferrer, completedNavigationTitle, completedNavigationCompletion)) {
-              return { ok: false, reason: "adapter-not-loaded" };
-            }
-            const hasEventName = properties !== undefined && Object.prototype.hasOwnProperty.call(properties, "_name");
-            const eventName = hasEventName ? Reflect.get(properties, "_name") : undefined;
-            if (hasEventName && (typeof eventName !== "string" || eventName.trim() === "")) {
-              return { ok: false, reason: "invalid-event" };
-            }
-            const hasValue = properties !== undefined && Object.prototype.hasOwnProperty.call(properties, "_value");
-            const value = hasValue ? Reflect.get(properties, "_value") : undefined;
-            if (hasValue && (typeof value !== "number" || !Number.isFinite(value))) {
-              return { ok: false, reason: "invalid-event" };
-            }
-            const command = ["trackEvent", config.eventCategory, name];
-            if (hasEventName || hasValue) command.push(hasEventName ? eventName : "");
-            if (hasValue) command.push(value);
-            return callQueue(command)
-              ? { ok: true }
-              : { ok: false, reason: "adapter-not-loaded" };
-          } catch { return { ok: false, reason: "adapter-not-loaded" }; }
-        }
-      });
-      registerHandler();
-      if (consentPending) return;
-
-      let localMatomo;
-      let localScript;
-      let localQueue;
-      let localQueueProxy;
-      let localPiwik;
-      let localTrackerAlias;
-      let queueBinding;
-      let matomoBinding;
-      let piwikBinding;
-      let trackerBinding;
-      const installBinding = (name, initialValue, recordOwnedValue) => {
-        let value = initialValue;
-        const get = () => value;
-        const set = (nextValue) => {
-          value = nextValue;
-          try {
-            if (localScript !== undefined && Reflect.get(documentValue, "currentScript") === localScript) {
-              Reflect.apply(recordOwnedValue, undefined, [nextValue]);
-            }
-          } catch {}
-        };
-        if (Reflect.defineProperty(root, name, {
-          configurable: true, enumerable: true, get, set
-        }) !== true) return undefined;
-        const descriptor = Reflect.getOwnPropertyDescriptor(root, name);
-        if (descriptor === undefined || descriptor.get !== get || descriptor.set !== set) return undefined;
-        return Object.freeze({ get, read: get, set });
-      };
-      const releaseBinding = (name, binding, ownedValue) => {
-        try {
-          if (binding === undefined) return;
-          const descriptor = Reflect.getOwnPropertyDescriptor(root, name);
-          if (descriptor === undefined || descriptor.get !== binding.get || descriptor.set !== binding.set) return;
-          const currentValue = Reflect.apply(binding.read, undefined, []);
-          if (currentValue === ownedValue) Reflect.deleteProperty(root, name);
-          else Reflect.defineProperty(root, name, {
-            configurable: true, enumerable: true, value: currentValue, writable: true
-          });
-        } catch {}
-      };
-      const cleanup = () => {
-        if (activeGeneration !== generation) return;
-        active = false;
-        activeGeneration = undefined;
-        vendorLoadProven = false;
-        vendorReady = false;
-        pendingPageviewUrl = undefined;
-        pendingPageviewReferrer = undefined;
-        pendingPageviewCompletion = undefined;
-        try {
-          if ((typeof localScript === "object" || typeof localScript === "function") && localScript !== null) {
-            const remove = Reflect.get(localScript, "remove");
-            if (typeof remove === "function") Reflect.apply(remove, localScript, []);
-          }
-        } catch {}
-        releaseBinding("_paq", queueBinding, localQueueProxy === undefined ? localQueue : localQueueProxy);
-        releaseBinding("Matomo", matomoBinding, localMatomo);
-        releaseBinding("Piwik", piwikBinding, localPiwik);
-        releaseBinding("AnalyticsTracker", trackerBinding, localTrackerAlias);
-      };
+    }
+    const flush = () => {
       try {
-        const getElementById = Reflect.get(documentValue, "getElementById");
-        const createElement = Reflect.get(documentValue, "createElement");
-        const head = Reflect.get(documentValue, "head");
-        if (typeof getElementById !== "function" || typeof createElement !== "function" ||
-            (typeof head !== "object" && typeof head !== "function") || head === null) return;
-        const occupied = Reflect.apply(getElementById, documentValue, [scriptId]);
-        if (occupied !== null && occupied !== undefined) return;
-        if (Reflect.getOwnPropertyDescriptor(root, "_paq") !== undefined ||
-            Reflect.getOwnPropertyDescriptor(root, "Matomo") !== undefined ||
-            Reflect.getOwnPropertyDescriptor(root, "Piwik") !== undefined ||
-            Reflect.getOwnPropertyDescriptor(root, "AnalyticsTracker") !== undefined) return;
-
-        const queue = [];
-        localQueue = queue;
-        ownedQueue = queue;
-        queueBinding = installBinding("_paq", queue, (value) => { localQueueProxy = value; });
-        matomoBinding = installBinding("Matomo", undefined, (value) => { localMatomo = value; });
-        piwikBinding = installBinding("Piwik", undefined, (value) => { localPiwik = value; });
-        trackerBinding = installBinding("AnalyticsTracker", undefined, (value) => { localTrackerAlias = value; });
-        if (queueBinding === undefined || matomoBinding === undefined || piwikBinding === undefined || trackerBinding === undefined ||
-            Reflect.get(root, "_paq") !== queue) {
-          cleanup();
-          return;
-        }
-        if (!queueBeforeReady(queue, ["setTrackerUrl", config.trackerUrl]) ||
-            !queueBeforeReady(queue, ["setSiteId", config.siteId])) {
-          cleanup();
-          return;
-        }
-        const script = Reflect.apply(createElement, documentValue, ["script"]);
-        localScript = script;
-        vendorScript = script;
-        Reflect.set(script, "id", scriptId);
-        Reflect.set(script, "src", config.scriptSrc);
-        Reflect.set(script, "async", true);
-        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-cwl-astro-analytics", "matomo-v1"]);
-        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-site-id", config.siteId]);
-        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-tracker-url", config.trackerUrl]);
-        active = true;
-        Reflect.apply(Reflect.get(script, "addEventListener"), script, ["load", () => {
-          try {
-            const queueProxy = Reflect.get(root, "_paq");
-            const matomo = Reflect.get(root, "Matomo");
-            const piwik = Reflect.get(root, "Piwik");
-            const trackerAlias = Reflect.get(root, "AnalyticsTracker");
-            const queueKeys = (typeof queueProxy === "object" || typeof queueProxy === "function") && queueProxy !== null
-              ? Reflect.ownKeys(queueProxy)
-              : [];
-            if (!active || activeGeneration !== generation || !matchesConfiguredScript() || queueProxy === localQueue ||
-                queueKeys.length !== 1 || queueKeys[0] !== "push" || typeof Reflect.get(queueProxy, "push") !== "function" ||
-                (typeof matomo !== "object" && typeof matomo !== "function") || matomo === null ||
-                piwik !== matomo || trackerAlias !== matomo || Reflect.get(matomo, "initialized") !== true ||
-                typeof Reflect.get(matomo, "getAsyncTrackers") !== "function" ||
-                localQueueProxy !== queueProxy || localMatomo !== matomo || localPiwik !== piwik || localTrackerAlias !== trackerAlias) {
-              cleanup();
-              return;
-            }
-            localQueueProxy = queueProxy;
-            localMatomo = matomo;
-            localPiwik = piwik;
-            localTrackerAlias = trackerAlias;
-            ownedQueue = queueProxy;
-            ownedMatomo = matomo;
-            vendorLoadProven = true;
-            vendorReady = true;
-            if (isPrerendering()) {
-              const addEventListener = Reflect.get(documentValue, "addEventListener");
-              if (typeof addEventListener !== "function") { cleanup(); return; }
-              Reflect.apply(addEventListener, documentValue, ["prerenderingchange", () => {
-                try { flushCompletedNavigation(generation); } catch { cleanup(); }
-              }, { once: true }]);
-            } else {
-              flushCompletedNavigation(generation);
-            }
-          } catch { cleanup(); }
-        }, { once: true }]);
-        Reflect.apply(Reflect.get(script, "addEventListener"), script, ["error", cleanup, { once: true }]);
-        Reflect.apply(Reflect.get(head, "appendChild"), head, [script]);
-      } catch { cleanup(); }
+        if (!active || !ready || inFlight || !pending || documentValue.prerendering === true ||
+            !locationAllowed() || !adapter.ready(root, config)) return;
+        route = pending;
+        if (!adapter.context(root, route, config)) return;
+        if (config.pageviews !== "none" && !adapter.pageview(root, route, config)) return;
+        pending = undefined;
+      } catch {
+        // Retain the completed route for a later lifecycle retry.
+      }
     };
-    const coordinator = Object.freeze({ run, runtimeToken: config.runtimeToken });
-    if (Reflect.defineProperty(documentValue, coordinatorKey, {
-      configurable: false, value: coordinator, writable: false
-    }) !== true || Reflect.get(documentValue, coordinatorKey) !== coordinator) return;
-    Reflect.apply(run, coordinator, [config]);
-  } catch {
-    // Provider failure must not prevent the page from rendering.
-  }
-})();`;
-}
-
-export function createUmamiBootstrapScript(
-  options: UmamiRuntimeOptions,
-): string {
-  const serializedOptions = serializeRuntimeOptions(options);
-  return `(() => {
-  "use strict";
-  const config = ${serializedOptions};
-  const brand = ${JSON.stringify(RUNTIME_CLIENT_BRAND)};
-  const scriptId = ${JSON.stringify(UMAMI_SCRIPT_ID)};
-  try {
-    const root = globalThis;
-    const documentValue = Reflect.get(root, "document");
-    if ((typeof documentValue !== "object" && typeof documentValue !== "function") || documentValue === null) return;
-    const symbolValue = Reflect.get(root, "Symbol");
-    if ((typeof symbolValue !== "object" && typeof symbolValue !== "function") || symbolValue === null) return;
-    const symbolFor = Reflect.get(symbolValue, "for");
-    if (typeof symbolFor !== "function") return;
-    const coordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:umami:v1"]);
-    if (typeof coordinatorKey !== "symbol") return;
-    const isLocationAllowed = () => {
-      if (config.locationPolicyRequired !== true) return true;
-      try {
-        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
-        if (typeof policyKey !== "symbol") return false;
-        const policy = Reflect.get(root, policyKey);
-        const allows = (typeof policy === "object" || typeof policy === "function") && policy !== null
-          ? Reflect.get(policy, "allowsCurrentLocation")
-          : undefined;
-        const keys = Reflect.ownKeys(policy);
-        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          keys.length === 6 && keys.includes("allowsUrl") && keys.includes("blockedQueryParameters") &&
-          keys.includes("setStartupPageLoadObserved") && keys.includes("startupPageLoadObserved") && typeof allows === "function" &&
-          Reflect.apply(allows, policy, []) === true;
-      } catch { return false; }
+    const complete = () => {
+      inFlight = false;
+      const next = readRoute(route);
+      if (!next) { route = undefined; pending = undefined; return; }
+      pending = next;
+      flush();
     };
-    const isUrlAllowed = (value) => {
-      if (config.locationPolicyRequired !== true) return true;
-      try {
-        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
-        const policy = Reflect.get(root, policyKey);
-        const allows = Reflect.get(policy, "allowsUrl");
-        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          Reflect.ownKeys(policy).length === 6 && typeof allows === "function" &&
-          Reflect.apply(allows, policy, [value]) === true;
-      } catch { return false; }
+    const beforeNavigation = () => { inFlight = true; };
+    const fail = () => {
+      if (!active) return;
+      active = false; ready = false; pending = undefined;
+      try { script?.remove(); } catch {}
+      try { adapter.cleanup(root, config); } catch {}
+      try { documentValue.removeEventListener("astro:before-preparation", beforeNavigation); } catch {}
+      try { documentValue.removeEventListener("astro:page-load", complete); } catch {}
+      try { if (root[stateKey] === state) delete root[stateKey]; } catch {}
     };
-    const startupPageLoadObserved = () => {
-      if (config.locationPolicyRequired !== true) return false;
-      try {
-        const policyKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:location-policy:v1"]);
-        const policy = Reflect.get(root, policyKey);
-        const observed = Reflect.get(policy, "startupPageLoadObserved");
-        return Reflect.get(policy, "runtimeToken") === config.runtimeToken &&
-          Reflect.ownKeys(policy).length === 6 && typeof observed === "function" &&
-          Reflect.apply(observed, policy, []) === true;
-      } catch { return false; }
-    };
+    Object.defineProperty(root, stateKey, { configurable: true, value: state });
     try {
-      const existingCoordinator = Reflect.get(documentValue, coordinatorKey);
-      if ((typeof existingCoordinator === "object" || typeof existingCoordinator === "function") && existingCoordinator !== null &&
-          Reflect.get(existingCoordinator, "runtimeToken") === config.runtimeToken) {
-        const keys = Reflect.ownKeys(existingCoordinator);
-        const existingRun = Reflect.get(existingCoordinator, "run");
-        if (keys.length === 2 && keys.includes("run") && keys.includes("runtimeToken") && typeof existingRun === "function") {
-          Reflect.apply(existingRun, existingCoordinator, [config]);
-        }
-        return;
-      }
-    } catch { return; }
-
-    let activeConfig;
-    let activeGeneration;
-    let generationCounter = 0;
-    let handler;
-    let lifecycle;
-    let observerInstalled = false;
-    let observationGap = false;
-    let locationObservationGap = false;
-    let pendingPageview;
-    let completedUrl;
-    let completedReferrer;
-    let completedTitle;
-    let completionCounter = 0;
-    let lastTrackedCompletion;
-    let vendorClient;
-    let vendorScript;
-    let vendorTrack;
-    let vendorReady = false;
-
-    const sameConfig = (value) => {
-      try {
-        return (typeof value === "object" || typeof value === "function") && value !== null &&
-          Reflect.get(value, "consentMode") === config.consentMode &&
-          Reflect.get(value, "events") === config.events &&
-          Reflect.get(value, "hostUrl") === config.hostUrl &&
-          Reflect.get(value, "locationPolicyRequired") === config.locationPolicyRequired &&
-          Reflect.get(value, "pageviews") === config.pageviews &&
-          Reflect.get(value, "runtimeToken") === config.runtimeToken &&
-          Reflect.get(value, "scriptSrc") === config.scriptSrc &&
-          Reflect.get(value, "websiteId") === config.websiteId;
-      } catch { return false; }
-    };
-    const readHref = () => {
-      if (!isLocationAllowed()) return undefined;
-      try {
-        const href = Reflect.get(Reflect.get(root, "location"), "href");
-        return typeof href === "string" ? href : undefined;
-      } catch { return undefined; }
-    };
-    const readTitle = () => {
-      try {
-        const title = Reflect.get(documentValue, "title");
-        return typeof title === "string" ? title : "";
-      } catch { return ""; }
-    };
-    const readDocumentReferrer = () => {
-      try {
-        const referrer = Reflect.get(documentValue, "referrer");
-        return typeof referrer === "string" && isUrlAllowed(referrer) ? referrer : "";
-      } catch { return ""; }
-    };
-    const isPrerendering = () => {
-      try { return Reflect.get(documentValue, "prerendering") === true; } catch { return false; }
-    };
-    const hasClientRouter = () => {
-      try {
-        const querySelector = Reflect.get(documentValue, "querySelector");
-        return typeof querySelector === "function" &&
-          Reflect.apply(querySelector, documentValue, ['[name="astro-view-transitions-enabled"]']) !== null;
-      } catch { return true; }
-    };
-    const registerHandler = () => {
-      if (!config.events || handler === undefined) return;
-      try {
-        const clientCoordinatorKey = Reflect.apply(symbolFor, symbolValue, ["codeworkslabs.astro-analytics:client-coordinator:v2"]);
-        if (typeof clientCoordinatorKey !== "symbol") return;
-        const clientCoordinator = Reflect.get(root, clientCoordinatorKey);
-        const register = (typeof clientCoordinator === "object" || typeof clientCoordinator === "function") && clientCoordinator !== null
-          ? Reflect.get(clientCoordinator, "register")
-          : undefined;
-        if (typeof register !== "function" || Reflect.get(clientCoordinator, "runtimeToken") !== config.runtimeToken) return;
-        Reflect.apply(register, clientCoordinator, ["umami", handler, config.runtimeToken]);
-      } catch {}
-    };
-    const matchesConfiguredScript = () => {
-      try {
-        const script = vendorScript;
-        if ((typeof script !== "object" && typeof script !== "function") || script === null ||
-            Reflect.get(script, "ownerDocument") !== documentValue ||
-            Reflect.get(script, "id") !== scriptId ||
-            Reflect.get(script, "tagName") !== "SCRIPT" ||
-            Reflect.get(script, "src") !== config.scriptSrc ||
-            Reflect.get(script, "async") !== true ||
-            Reflect.get(script, "defer") !== true ||
-            Reflect.get(script, "noModule") !== false ||
-            Reflect.get(script, "type") !== "") return false;
-        const getElementById = Reflect.get(documentValue, "getElementById");
-        const getAttribute = Reflect.get(script, "getAttribute");
-        const getAttributeNames = Reflect.get(script, "getAttributeNames");
-        if (typeof getElementById !== "function" || typeof getAttribute !== "function" ||
-            typeof getAttributeNames !== "function" ||
-            Reflect.apply(getAttribute, script, ["data-auto-pageview"]) !== "false" ||
-            Reflect.apply(getAttribute, script, ["data-cwl-astro-analytics"]) !== "umami-v1" ||
-            Reflect.apply(getAttribute, script, ["data-website-id"]) !== config.websiteId ||
-            Reflect.apply(getAttribute, script, ["data-host-url"]) !==
-              (typeof config.hostUrl === "string" ? config.hostUrl : null)) return false;
-        const connected = Reflect.get(script, "isConnected") === true;
-        const boundScript = Reflect.apply(getElementById, documentValue, [scriptId]);
-        if (connected ? boundScript !== script : boundScript !== null) return false;
-        const names = Reflect.apply(getAttributeNames, script, []);
-        if (!Array.isArray(names)) return false;
-        const dataNames = names.filter((name) => typeof name === "string" && name.startsWith("data-"));
-        const expectedNames = ["data-auto-pageview", "data-cwl-astro-analytics", "data-website-id"];
-        if (typeof config.hostUrl === "string") expectedNames.push("data-host-url");
-        return dataNames.length === expectedNames.length &&
-          expectedNames.every((name) => dataNames.includes(name));
-      } catch { return false; }
-    };
-    const hasUsableVendor = () => {
-      try {
-        const current = Reflect.get(root, "umami");
-        return vendorReady && matchesConfiguredScript() && current === vendorClient &&
-          (typeof current === "object" || typeof current === "function") && current !== null &&
-          Reflect.get(current, "track") === vendorTrack && typeof vendorTrack === "function";
-      } catch { return false; }
-    };
-    const callUmami = (args) => {
-      if (!isLocationAllowed() || !hasUsableVendor()) return false;
-      Reflect.apply(vendorTrack, vendorClient, args);
-      return true;
-    };
-    const sendPageview = (pageview) => {
-      try {
-        if (!hasUsableVendor() || lifecycle?.active !== true || pageview === undefined ||
-            pageview.completion === lastTrackedCompletion) {
-          return pageview?.completion === lastTrackedCompletion;
-        }
-        const payload = (properties) => {
-          const base = (typeof properties === "object" || typeof properties === "function") && properties !== null
-            ? properties
-            : {};
-          return { ...base, url: pageview.url, title: pageview.title, referrer: pageview.referrer };
-        };
-        if (!callUmami([payload])) return false;
-        lastTrackedCompletion = pageview.completion;
-        return true;
-      } catch { return false; }
-    };
-    const flushPageview = () => {
-      if (lifecycle?.active !== true || isPrerendering()) return;
-      const href = readHref();
-      const pageview = pendingPageview;
-      if (pageview === undefined) return;
-      if (pageview.url !== href) return;
-      if (sendPageview(pageview)) pendingPageview = undefined;
-    };
-    const recordPageLoad = () => {
-      const href = readHref();
-      if (typeof href !== "string") {
-        observationGap = true;
-        locationObservationGap = true;
-        pendingPageview = undefined;
-        completedUrl = undefined;
-        completedReferrer = undefined;
-        completedTitle = undefined;
-        return;
-      }
-      const closesLocationGap = locationObservationGap;
-      const referrer = observationGap
-        ? ""
-        : typeof completedUrl === "string"
-          ? completedUrl
-          : completedReferrer ?? readDocumentReferrer();
-      completedUrl = href;
-      completedReferrer = referrer;
-      completedTitle = readTitle();
-      if (config.pageviews !== "none") {
-        pendingPageview = Object.freeze({
-          completion: ++completionCounter,
-          referrer,
-          title: completedTitle,
-          url: href,
-        });
-      }
-      if (observationGap) {
-        observationGap = false;
-        locationObservationGap = false;
-        if (closesLocationGap) pendingPageview = undefined;
-        try { run(config); } catch {}
-        return;
-      }
-      if (vendorReady && lifecycle?.active === true && !isPrerendering()) flushPageview();
-    };
-    const recordInitialDocument = () => {
-      if (typeof completedUrl !== "string") recordPageLoad();
-    };
-    const ensureObserver = () => {
-      if (config.pageviews === "none" && !config.events) return true;
-      if (observerInstalled) return !observationGap;
-      try {
-        const addEventListener = Reflect.get(documentValue, "addEventListener");
-        if (typeof addEventListener !== "function") {
-          observationGap = true;
-          return false;
-        }
-        Reflect.apply(addEventListener, documentValue, ["astro:page-load", recordPageLoad]);
-        if (startupPageLoadObserved()) {
-          observationGap = true;
-          locationObservationGap = true;
-          recordPageLoad();
-        } else if (!hasClientRouter()) {
-          const readyState = Reflect.get(documentValue, "readyState");
-          if (readyState === "interactive" || readyState === "complete") {
-            recordInitialDocument();
-          } else {
-            Reflect.apply(addEventListener, documentValue, ["DOMContentLoaded", recordInitialDocument, { once: true }]);
-          }
-        }
-        observerInstalled = true;
-        return !observationGap;
-      } catch {
-        observationGap = true;
-        return false;
-      }
-    };
-
-    const run = (nextConfig) => {
-      let cleanup;
-      let generation;
-      let lifecycleActive = false;
-      try {
-        if (!sameConfig(nextConfig)) return;
-        if (activeConfig !== undefined) {
-          if (lifecycle?.active === true) {
-            registerHandler();
-            if (vendorReady && !isPrerendering()) flushPageview();
-            return;
-          }
-          activeConfig = undefined;
-        }
-        activeConfig = nextConfig;
-        generation = ++generationCounter;
-        activeGeneration = generation;
-        vendorClient = undefined;
-        vendorScript = undefined;
-        vendorTrack = undefined;
-        vendorReady = false;
-        lastTrackedCompletion = undefined;
-        lifecycleActive = true;
-        lifecycle = Object.freeze({ get active() { return lifecycleActive; } });
-        const consentPending = config.consentMode === "deferred" || config.consentMode === "external";
-        handler = Object.freeze({
-          __astroAnalyticsBrand: brand,
-          __astroAnalyticsProvider: "umami",
-          status() {
-            if (activeGeneration !== generation || lifecycle.active !== true) return "adapter-not-loaded";
-            if (consentPending) return "consent-pending";
-            return hasUsableVendor() && typeof completedUrl === "string"
-              ? "ready"
-              : "adapter-not-loaded";
-          },
-          track(name, properties) {
-            try {
-              if (activeGeneration !== generation || lifecycle.active !== true || !hasUsableVendor()) {
-                return { ok: false, reason: consentPending ? "consent-pending" : "adapter-not-loaded" };
-              }
-              if (typeof completedUrl !== "string") return { ok: false, reason: "adapter-not-loaded" };
-              if (name.length > 50) return { ok: false, reason: "invalid-event" };
-              let data;
-              if (properties !== undefined) {
-                const keys = Reflect.ownKeys(properties);
-                if (keys.length > 50) return { ok: false, reason: "invalid-event" };
-                data = Object.create(null);
-                for (const key of keys) {
-                  const value = Reflect.get(properties, key);
-                  if (typeof value === "string" && value.length > 500) {
-                    return { ok: false, reason: "invalid-event" };
-                  }
-                  if (typeof value === "number") {
-                    const numeric = /^-?\\d+(?:\\.(\\d+))?(?:e([+-]?\\d+))?$/i.exec(String(value));
-                    const decimalPlaces = numeric === null
-                      ? 0
-                      : (numeric[1]?.length ?? 0) - Number(numeric[2] ?? 0);
-                    if (decimalPlaces > 4) return { ok: false, reason: "invalid-event" };
-                  }
-                  Reflect.defineProperty(data, key, {
-                    configurable: false,
-                    enumerable: true,
-                    value,
-                    writable: false,
-                  });
-                }
-                Object.freeze(data);
-              }
-              const eventUrl = completedUrl;
-              const eventTitle = completedTitle ?? "";
-              const eventReferrer = completedReferrer ?? "";
-              const payload = (properties) => {
-                const base = (typeof properties === "object" || typeof properties === "function") && properties !== null
-                  ? properties
-                  : {};
-                return data === undefined
-                  ? { ...base, url: eventUrl, title: eventTitle, referrer: eventReferrer, name }
-                  : { ...base, url: eventUrl, title: eventTitle, referrer: eventReferrer, name, data };
-              };
-              return callUmami([payload])
-                ? { ok: true }
-                : { ok: false, reason: "adapter-not-loaded" };
-            } catch { return { ok: false, reason: "adapter-not-loaded" }; }
-          }
-        });
-        registerHandler();
-        if (consentPending) return;
-        if (!ensureObserver()) {
-          lifecycleActive = false;
-          activeGeneration = undefined;
-          activeConfig = undefined;
-          return;
-        }
-
-        const getElementById = Reflect.get(documentValue, "getElementById");
-        const createElement = Reflect.get(documentValue, "createElement");
-        const head = Reflect.get(documentValue, "head");
-        if (typeof getElementById !== "function" || typeof createElement !== "function" ||
-            (typeof head !== "object" && typeof head !== "function") || head === null) {
-          lifecycleActive = false;
-          activeGeneration = undefined;
-          activeConfig = undefined;
-          return;
-        }
-        if (Reflect.apply(getElementById, documentValue, [scriptId]) !== null ||
-            Reflect.getOwnPropertyDescriptor(root, "umami") !== undefined) {
-          lifecycleActive = false;
-          activeGeneration = undefined;
-          activeConfig = undefined;
-          return;
-        }
-
-        let boundValue;
-        let assignedVendor;
-        let script;
-        const get = () => boundValue;
-        const set = (value) => {
-          boundValue = value;
-          try {
-            if (script !== undefined && Reflect.get(documentValue, "currentScript") === script &&
-                matchesConfiguredScript()) assignedVendor = value;
-          } catch {}
-        };
-        const releaseBinding = () => {
-          try {
-            const descriptor = Reflect.getOwnPropertyDescriptor(root, "umami");
-            if (descriptor === undefined || descriptor.get !== get || descriptor.set !== set) return;
-            if (boundValue === assignedVendor) Reflect.deleteProperty(root, "umami");
-            else Reflect.defineProperty(root, "umami", {
-              configurable: true, enumerable: true, value: boundValue, writable: true
-            });
-          } catch {}
-        };
-        const fail = () => {
-          if (activeGeneration !== generation || !lifecycleActive) return;
-          lifecycleActive = false;
-          activeGeneration = undefined;
-          activeConfig = undefined;
-          vendorClient = undefined;
-          vendorScript = undefined;
-          vendorTrack = undefined;
-          vendorReady = false;
-          try {
-            if ((typeof script === "object" || typeof script === "function") && script !== null) {
-              const remove = Reflect.get(script, "remove");
-              if (typeof remove === "function") Reflect.apply(remove, script, []);
-            }
-          } catch {}
-          releaseBinding();
-        };
-        cleanup = fail;
-        if (Reflect.defineProperty(root, "umami", {
-          configurable: true, enumerable: true, get, set
-        }) !== true) {
-          lifecycleActive = false;
-          activeGeneration = undefined;
-          activeConfig = undefined;
-          return;
-        }
-        const descriptor = Reflect.getOwnPropertyDescriptor(root, "umami");
-        if (descriptor === undefined || descriptor.get !== get || descriptor.set !== set) {
-          fail();
-          return;
-        }
-        script = Reflect.apply(createElement, documentValue, ["script"]);
-        vendorScript = script;
-        Reflect.set(script, "id", scriptId);
-        Reflect.set(script, "src", config.scriptSrc);
-        Reflect.set(script, "async", true);
-        Reflect.set(script, "defer", true);
-        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-auto-pageview", "false"]);
-        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-cwl-astro-analytics", "umami-v1"]);
-        Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-website-id", config.websiteId]);
-        if (typeof config.hostUrl === "string") {
-          Reflect.apply(Reflect.get(script, "setAttribute"), script, ["data-host-url", config.hostUrl]);
-        }
-        Reflect.apply(Reflect.get(script, "addEventListener"), script, ["load", () => {
-          try {
-            if (activeGeneration !== generation || lifecycle.active !== true) return;
-            const current = Reflect.get(root, "umami");
-            const track = (typeof current === "object" || typeof current === "function") && current !== null
-              ? Reflect.get(current, "track")
-              : undefined;
-            if (!matchesConfiguredScript() || current !== assignedVendor || typeof track !== "function") {
-              fail();
-              return;
-            }
-            vendorClient = current;
-            vendorTrack = track;
-            vendorReady = true;
-            if (config.pageviews !== "none") {
-              if (isPrerendering()) {
-                const addEventListener = Reflect.get(documentValue, "addEventListener");
-                if (typeof addEventListener !== "function") { fail(); return; }
-                Reflect.apply(addEventListener, documentValue, ["prerenderingchange", () => {
-                  if (activeGeneration === generation) flushPageview();
-                }, { once: true }]);
-              } else {
-                flushPageview();
-              }
-            }
-          } catch { fail(); }
-        }, { once: true }]);
-        Reflect.apply(Reflect.get(script, "addEventListener"), script, ["error", fail, { once: true }]);
-        Reflect.apply(Reflect.get(head, "appendChild"), head, [script]);
-      } catch {
-        if (typeof cleanup === "function") cleanup();
-        else if (activeGeneration === generation) {
-          lifecycleActive = false;
-          activeGeneration = undefined;
-          activeConfig = undefined;
-        }
-      }
-    };
-    const coordinator = Object.freeze({ run, runtimeToken: config.runtimeToken });
-    if (Reflect.defineProperty(documentValue, coordinatorKey, {
-      configurable: false, value: coordinator, writable: false
-    }) !== true || Reflect.get(documentValue, coordinatorKey) !== coordinator) return;
-    Reflect.apply(run, coordinator, [config]);
+      register();
+      documentValue.addEventListener("astro:before-preparation", beforeNavigation);
+      documentValue.addEventListener("astro:page-load", complete);
+      documentValue.addEventListener("prerenderingchange", flush);
+      if (startupCompletion()) complete();
+      if (consentPending) return;
+      const hasClientRouter = typeof documentValue.querySelector === "function" &&
+        documentValue.querySelector('[name="astro-view-transitions-enabled"]') !== null;
+      if (!hasClientRouter && !route) pending = readRoute();
+      if (!adapter.prepare(root, config)) { fail(); return; }
+      script = documentValue.createElement("script");
+      let selectedId = adapter.scriptId;
+      for (let suffix = 0; documentValue.getElementById(selectedId); suffix += 1)
+        selectedId = `${adapter.scriptId}-${suffix + 1}`;
+      script.id = selectedId;
+      script.src = config.scriptSrc;
+      adapter.configureScript(script, config);
+      script.addEventListener("load", () => {
+        try {
+          if (!active || !adapter.ready(root, config)) { fail(); return; }
+          ready = true;
+          flush();
+        } catch { fail(); }
+      });
+      script.addEventListener("error", fail);
+      documentValue.head.appendChild(script);
+    } catch { fail(); }
   } catch {
-    // Provider failure must not prevent the page from rendering.
+    // Analytics must never break the host page.
   }
-})();`;
 }
+
+function fathomAdapter(): BrowserAdapter {
+  return {
+    name: "fathom", scriptId: "codeworkslabs-astro-analytics-fathom",
+    configureScript(script, config) {
+      script.async = false; script.defer = true;
+      script.setAttribute("data-cwl-astro-analytics", "fathom-v2");
+      script.setAttribute("data-site", config.siteId); script.setAttribute("data-auto", "false");
+      if (config.honorDnt === true) script.setAttribute("data-honor-dnt", "true");
+      if (config.canonical === false) script.setAttribute("data-canonical", "false");
+    },
+    prepare() { return true; }, cleanup() {}, context() { return true; },
+    ready(root, config) {
+      return !!root.fathom && (config.pageviews === "none" || typeof root.fathom.trackPageview === "function") &&
+        (!config.events || typeof root.fathom.trackEvent === "function");
+    },
+    pageview(root, route) {
+      const options: any = { url: route.url }; if (route.referrer) options.referrer = route.referrer;
+      root.fathom.trackPageview(options); return true;
+    },
+    event(root, name, properties) {
+      const value = properties?._value;
+      if (value !== undefined && (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0))
+        return { ok: false, reason: "invalid-event" };
+      if (value === undefined) root.fathom.trackEvent(name);
+      else root.fathom.trackEvent(name, { _value: value });
+      return { ok: true };
+    },
+  };
+}
+
+function plausibleAdapter(): BrowserAdapter {
+  let requestReferrer = "";
+  let owned: any;
+  return {
+    name: "plausible", scriptId: "codeworkslabs-astro-analytics-plausible",
+    configureScript(script) { script.async = true; script.defer = false; script.setAttribute("data-cwl-astro-analytics", "plausible-v2"); },
+    prepare(root, config) {
+      if (root.plausible !== undefined) return false;
+      const queue: any[] = [];
+      owned = (...args: any[]) => queue.push(args); owned.q = queue;
+      owned.init = (options: any = {}) => { owned.o = options; };
+      root.plausible = owned;
+      owned.init({ autoCapturePageviews: false, captureOnLocalhost: config.captureOnLocalhost === true,
+        ...(config.endpoint ? { endpoint: config.endpoint } : {}),
+        transformRequest(payload: any) { if (payload && typeof payload === "object") payload.r = requestReferrer; return payload; } });
+      return true;
+    },
+    cleanup(root) { if (root.plausible === owned) delete root.plausible; },
+    ready(root) { return typeof root.plausible === "function" && root.plausible !== owned && root.plausible.l === true; },
+    context(_root, route) { requestReferrer = route.referrer; return true; },
+    pageview(root, route) { root.plausible("pageview", { url: route.url }); return true; },
+    event(root, name, properties) {
+      if (properties && Object.keys(properties).length > 30) return { ok: false, reason: "invalid-event" };
+      const props = properties && Object.fromEntries(Object.entries(properties).map(([key, value]) => [key, String(value)]));
+      root.plausible(name, props ? { props } : undefined); return { ok: true };
+    },
+  };
+}
+
+function googleAdapter(): BrowserAdapter {
+  let dataLayer: any[] | undefined;
+  let gtag: any;
+  const validName = (value: string) => Array.from(value).length <= 40 && /^[\p{L}][\p{L}\p{N}_]*$/u.test(value) &&
+    !["firebase_", "ga_", "google_"].some((prefix) => value.toLowerCase().startsWith(prefix));
+  return {
+    name: "google-analytics", scriptId: "codeworkslabs-astro-analytics-google-analytics",
+    configureScript(script, config) {
+      script.async = true; script.defer = false;
+      script.setAttribute("data-cwl-astro-analytics", "google-analytics-v2");
+      script.setAttribute("data-measurement-id", config.measurementId);
+    },
+    prepare(root, config) {
+      if (root.gtag !== undefined || root.dataLayer !== undefined) return false;
+      dataLayer = [];
+      gtag = function() { dataLayer?.push(arguments); };
+      root.dataLayer = dataLayer; root.gtag = gtag;
+      if (config.consentInitial) {
+        const initial: any = {};
+        const names: Record<string, string> = { analyticsStorage: "analytics_storage", adStorage: "ad_storage", adUserData: "ad_user_data", adPersonalization: "ad_personalization" };
+        for (const [source, target] of Object.entries(names)) if (config.consentInitial[source] !== undefined) initial[target] = config.consentInitial[source];
+        gtag("consent", "default", initial);
+      }
+      gtag("js", new Date());
+      gtag("config", config.measurementId, { ...(config.config ?? {}), send_page_view: false, page_referrer: "" });
+      return true;
+    },
+    cleanup(root) { if (root.gtag === gtag) delete root.gtag; if (root.dataLayer === dataLayer) delete root.dataLayer; },
+    ready(root) { return root.gtag === gtag && root.dataLayer === dataLayer; }, context() { return true; },
+    pageview(root, route, config) {
+      root.gtag("event", "page_view", { page_location: route.url, page_title: route.title, page_referrer: route.referrer, send_to: config.measurementId }); return true;
+    },
+    event(root, name, properties, _route, config) {
+      if (!validName(name) || (properties && Object.keys(properties).length > 25) || properties?.send_to !== undefined)
+        return { ok: false, reason: "invalid-event" };
+      for (const [key, value] of Object.entries(properties ?? {}))
+        if (!validName(key) || typeof value === "string" && Array.from(value).length > 100)
+          return { ok: false, reason: "invalid-event" };
+      root.gtag("event", name, { ...(properties ?? {}), send_to: config.measurementId }); return { ok: true };
+    },
+  };
+}
+
+function matomoAdapter(): BrowserAdapter {
+  let queue: any;
+  const push = (command: any[]) => { queue.push(command); return true; };
+  return {
+    name: "matomo", scriptId: "codeworkslabs-astro-analytics-matomo",
+    configureScript(script) { script.async = true; script.defer = false; script.setAttribute("data-cwl-astro-analytics", "matomo-v2"); },
+    prepare(root, config) {
+      if (root._paq !== undefined) return false;
+      queue = []; root._paq = queue; push(["setTrackerUrl", config.trackerUrl]); push(["setSiteId", config.siteId]); return true;
+    },
+    cleanup(root) { if (root._paq === queue) delete root._paq; },
+    ready(root) { return root._paq === queue || !!root._paq && typeof root._paq.push === "function"; },
+    context(root, route) {
+      queue = root._paq; push(["setCustomUrl", route.url]); push(["setDocumentTitle", route.title]); push(["setReferrerUrl", route.referrer]); return true;
+    },
+    pageview() { push(["trackPageView"]); return true; },
+    event(root, name, properties, route, config) {
+      if (route) this.context(root, route, config);
+      const label = properties?._name; const value = properties?._value;
+      if (label !== undefined && (typeof label !== "string" || label.length === 0) ||
+          value !== undefined && (typeof value !== "number" || !Number.isFinite(value))) return { ok: false, reason: "invalid-event" };
+      const command: any[] = ["trackEvent", config.eventCategory, name];
+      if (label !== undefined || value !== undefined) command.push(label ?? "");
+      if (value !== undefined) command.push(value);
+      push(command); return { ok: true };
+    },
+  };
+}
+
+function umamiAdapter(): BrowserAdapter {
+  return {
+    name: "umami", scriptId: "codeworkslabs-astro-analytics-umami",
+    configureScript(script, config) {
+      script.async = true; script.defer = false;
+      script.setAttribute("data-cwl-astro-analytics", "umami-v2");
+      script.setAttribute("data-website-id", config.websiteId); script.setAttribute("data-auto-pageview", "false");
+      if (config.hostUrl) script.setAttribute("data-host-url", config.hostUrl);
+    },
+    prepare(root) { return root.umami === undefined; }, cleanup() {}, context() { return true; },
+    ready(root) { return !!root.umami && typeof root.umami.track === "function"; },
+    pageview(root, route) {
+      root.umami.track((payload: any) => ({ ...payload, url: route.url, title: route.title, referrer: route.referrer })); return true;
+    },
+    event(root, name, properties, route) {
+      if (Array.from(name).length > 50 || properties && Object.keys(properties).length > 50) return { ok: false, reason: "invalid-event" };
+      for (const value of Object.values(properties ?? {}))
+        if (typeof value === "string" && Array.from(value).length > 500 ||
+            typeof value === "number" && Math.round(value * 10_000) !== value * 10_000)
+          return { ok: false, reason: "invalid-event" };
+      root.umami.track((payload: any) => ({ ...payload, name, data: properties, url: route?.url, title: route?.title, referrer: route?.referrer }));
+      return { ok: true };
+    },
+  };
+}
+
+function providerScript(options: unknown, factory: () => BrowserAdapter): string {
+  return `(${browserProviderRuntime.toString()})(${serialize(options)},(${factory.toString()})(),${JSON.stringify(RUNTIME_CLIENT_BRAND)});`;
+}
+
+export function createBootstrapScript(options: AnalyticsRuntimeOptions = { events: true, providers: ["fathom"], runtimeToken: "test-runtime-token" }): string {
+  return `(${browserClientRuntime.toString()})(${serialize(options)},${JSON.stringify(RUNTIME_CLIENT_BRAND)});`;
+}
+
+export const createFathomBootstrapScript = (options: FathomRuntimeOptions): string => providerScript(options, fathomAdapter);
+export const createPlausibleBootstrapScript = (options: PlausibleRuntimeOptions): string => providerScript(options, plausibleAdapter);
+export const createGoogleAnalyticsBootstrapScript = (options: GoogleAnalyticsRuntimeOptions): string => providerScript(options, googleAdapter);
+export const createMatomoBootstrapScript = (options: MatomoRuntimeOptions): string => providerScript(options, matomoAdapter);
+export const createUmamiBootstrapScript = (options: UmamiRuntimeOptions): string => providerScript(options, umamiAdapter);

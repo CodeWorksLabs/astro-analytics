@@ -9,12 +9,6 @@ export interface AnalyticsEnvironments {
   development?: boolean;
 }
 
-/** @deprecated Event queueing and alternate globals are not part of the current client. */
-export interface EventOptions {
-  globalName?: "astroAnalytics";
-  queue?: false | { maxSize: number };
-}
-
 export interface GoogleConsentConfig {
   mode: ConsentMode;
   initial?: {
@@ -86,10 +80,8 @@ export type NormalizedAnalyticsProvider = AnalyticsProvider & {
 export interface AstroAnalyticsConfig {
   enabled?: boolean;
   environments?: AnalyticsEnvironments;
-  /** @deprecated Use providers for multi-provider operation. */
-  provider?: false | AnalyticsProvider;
-  providers?: false | readonly AnalyticsProvider[];
-  events?: boolean | EventOptions;
+  providers: false | readonly AnalyticsProvider[];
+  events?: boolean;
   /** Suppress the entire browser runtime when any named query parameter is present. */
   blockedQueryParameters?: readonly string[];
   debug?: boolean;
@@ -98,8 +90,6 @@ export interface AstroAnalyticsConfig {
 export interface NormalizedAstroAnalyticsConfig {
   enabled: boolean;
   environments: Required<AnalyticsEnvironments>;
-  /** Normalized legacy input; absent when providers was supplied. */
-  provider?: false | NormalizedAnalyticsProvider | undefined;
   providers: false | readonly NormalizedAnalyticsProvider[];
   events: boolean;
   blockedQueryParameters: readonly string[];
@@ -572,24 +562,6 @@ function normalizeEnvironments(value: unknown): Required<AnalyticsEnvironments> 
   };
 }
 
-function normalizeEvents(value: unknown): boolean {
-  if (typeof value === "boolean") return value;
-  const events = expectObject(value, "configuration.events");
-  assertExactKeys(events, ["globalName", "queue"], "configuration.events");
-  if (hasOwn(events, "globalName") && events.globalName !== "astroAnalytics") {
-    throw new TypeError('configuration.events.globalName must be "astroAnalytics".');
-  }
-  if (hasOwn(events, "queue") && events.queue !== false) {
-    const queue = expectObject(events.queue, "configuration.events.queue");
-    assertExactKeys(queue, ["maxSize"], "configuration.events.queue");
-    if (!hasOwn(queue, "maxSize") || typeof queue.maxSize !== "number" ||
-        !Number.isInteger(queue.maxSize) || queue.maxSize < 1 || queue.maxSize > 100) {
-      throw new TypeError("configuration.events.queue.maxSize must be an integer from 1 to 100.");
-    }
-  }
-  return true;
-}
-
 function normalizeBlockedQueryParameters(value: unknown): readonly string[] {
   if (!Array.isArray(value)) {
     throw new TypeError("configuration.blockedQueryParameters must be an array.");
@@ -619,27 +591,14 @@ export function normalizeConfig(configValue: unknown): NormalizedAstroAnalyticsC
   const config = expectObject(configValue, "astroAnalytics() configuration");
   assertExactKeys(
     config,
-    ["enabled", "environments", "provider", "providers", "events", "blockedQueryParameters", "debug"],
+    ["enabled", "environments", "providers", "events", "blockedQueryParameters", "debug"],
     "configuration",
   );
-  const hasProvider = hasOwn(config, "provider");
   const hasProviders = hasOwn(config, "providers");
-  if (!hasProvider && !hasProviders) {
-    throw new TypeError("configuration.provider is required unless configuration.providers is supplied.");
+  if (!hasProviders) {
+    throw new TypeError("configuration.providers is required.");
   }
-  if (hasProvider && hasProviders) {
-    throw new TypeError("configuration.provider and configuration.providers cannot be used together.");
-  }
-  const legacyProvider = hasProvider
-    ? config.provider === false
-      ? false
-      : normalizeProvider(config.provider)
-    : undefined;
-  const providers = hasProviders
-    ? normalizeProviders(config.providers)
-    : legacyProvider === false
-      ? false
-      : Object.freeze([legacyProvider as NormalizedAnalyticsProvider]);
+  const providers = normalizeProviders(config.providers);
   return {
     enabled: hasOwn(config, "enabled")
       ? expectBoolean(config.enabled, "configuration.enabled")
@@ -647,10 +606,9 @@ export function normalizeConfig(configValue: unknown): NormalizedAstroAnalyticsC
     environments: hasOwn(config, "environments")
       ? normalizeEnvironments(config.environments)
       : { production: true, preview: false, development: false },
-    ...(hasProvider ? { provider: legacyProvider } : {}),
     providers,
     events: hasOwn(config, "events")
-      ? normalizeEvents(config.events)
+      ? expectBoolean(config.events, "configuration.events")
       : false,
     blockedQueryParameters: hasOwn(config, "blockedQueryParameters")
       ? normalizeBlockedQueryParameters(config.blockedQueryParameters)

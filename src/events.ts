@@ -5,38 +5,16 @@ export const EVENT_PROPERTY_COUNT_MAX = 100;
 export const EVENT_PROPERTY_KEY_MAX_LENGTH = 128;
 export const EVENT_PROPERTY_STRING_MAX_LENGTH = 1024;
 
-export type TrackFailureReason =
-  | "disabled"
-  | "adapter-not-loaded"
-  | "consent-pending"
-  | "invalid-event";
-
+export type TrackFailureReason = "disabled" | "adapter-not-loaded" | "consent-pending" | "invalid-event";
 export type ProviderName = AnalyticsProvider["name"];
 export type ProviderTrackFailureReason = Exclude<TrackFailureReason, "disabled">;
-
-export type ProviderTrackResult =
-  | { ok: true }
-  | { ok: false; reason: ProviderTrackFailureReason };
-
-export type ProviderTrackResults = Readonly<
-  Partial<Record<ProviderName, ProviderTrackResult>>
->;
-export type ProviderRuntimeStatus =
-  | "ready"
-  | "adapter-not-loaded"
-  | "consent-pending";
-export type ProviderRuntimeStatuses = Readonly<
-  Partial<Record<ProviderName, ProviderRuntimeStatus>>
->;
-
+export type ProviderTrackResult = { ok: true } | { ok: false; reason: ProviderTrackFailureReason };
+export type ProviderTrackResults = Readonly<Partial<Record<ProviderName, ProviderTrackResult>>>;
+export type ProviderRuntimeStatus = "ready" | "adapter-not-loaded" | "consent-pending";
+export type ProviderRuntimeStatuses = Readonly<Partial<Record<ProviderName, ProviderRuntimeStatus>>>;
 export type TrackResult =
   | { ok: true; providers: ProviderTrackResults }
-  | {
-      ok: false;
-      providers: ProviderTrackResults;
-      reason?: TrackFailureReason;
-    };
-
+  | { ok: false; providers: ProviderTrackResults; reason?: TrackFailureReason };
 export type EventProperties = Record<string, string | number | boolean>;
 
 export interface AstroAnalyticsClient {
@@ -46,273 +24,125 @@ export interface AstroAnalyticsClient {
 }
 
 declare global {
-  interface Window {
-    astroAnalytics?: AstroAnalyticsClient;
-  }
+  interface Window { astroAnalytics?: AstroAnalyticsClient; }
 }
 
-const FAILURE_REASONS = new Set<TrackFailureReason>([
-  "disabled",
-  "adapter-not-loaded",
-  "consent-pending",
-  "invalid-event",
-]);
-const PROVIDER_FAILURE_REASONS = new Set<ProviderTrackFailureReason>([
-  "adapter-not-loaded",
-  "consent-pending",
-  "invalid-event",
-]);
-const PROVIDER_RUNTIME_STATUSES = new Set<ProviderRuntimeStatus>([
-  "ready",
-  "adapter-not-loaded",
-  "consent-pending",
-]);
+const PROVIDERS = new Set<ProviderName>(["fathom", "google-analytics", "matomo", "plausible", "umami"]);
+const STATUSES = new Set<ProviderRuntimeStatus>(["ready", "adapter-not-loaded", "consent-pending"]);
+const REASONS = new Set<ProviderTrackFailureReason>(["adapter-not-loaded", "consent-pending", "invalid-event"]);
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
+function record(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null
+    ? value as Record<string, unknown>
+    : undefined;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  if (!isObject(value)) return false;
-  const prototype = Reflect.getPrototypeOf(value);
-  return prototype === null || prototype === Object.prototype;
-}
-
-function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
-  const actual = Reflect.ownKeys(value);
-  return actual.length === keys.length && keys.every((key) => actual.includes(key));
-}
-
-function normalizeEvent(
-  name: unknown,
-  properties: unknown,
-): { name: string; properties?: EventProperties } | undefined {
-  if (typeof name !== "string") return undefined;
-  const normalizedName = name.trim();
-  if (!normalizedName || normalizedName.length > EVENT_NAME_MAX_LENGTH) {
-    return undefined;
-  }
-  if (properties === undefined) return { name: normalizedName };
-  if (!isRecord(properties)) return undefined;
-
-  const keys = Reflect.ownKeys(properties);
-  if (keys.length > EVENT_PROPERTY_COUNT_MAX) return undefined;
-  const normalized: EventProperties = {};
-  for (const key of keys) {
-    if (typeof key !== "string") return undefined;
-    const value = Reflect.get(properties, key) as unknown;
-    if (!key || key.length > EVENT_PROPERTY_KEY_MAX_LENGTH) return undefined;
-    if (typeof value === "string") {
-      if (value.length > EVENT_PROPERTY_STRING_MAX_LENGTH) return undefined;
-    } else if (typeof value === "number") {
-      if (!Number.isFinite(value)) return undefined;
-    } else if (typeof value !== "boolean") {
-      return undefined;
-    }
-    Object.defineProperty(normalized, key, {
-      configurable: true,
-      enumerable: true,
-      value,
-      writable: true,
-    });
-  }
-  return { name: normalizedName, properties: normalized };
-}
-
-function emptyFailure(reason: "disabled" | "invalid-event"): TrackResult {
-  return { ok: false, providers: Object.freeze({}), reason };
-}
-
-function normalizeProviderResult(value: unknown): ProviderTrackResult {
-  if (!isRecord(value)) {
-    return { ok: false, reason: "adapter-not-loaded" };
-  }
-  const keys = Reflect.ownKeys(value);
-  const ok = Reflect.get(value, "ok") as unknown;
-  if (ok === true && keys.length === 1 && keys[0] === "ok") {
-    return { ok: true };
-  }
-  if (ok === false && hasExactKeys(value, ["ok", "reason"])) {
-    const reason = Reflect.get(value, "reason") as unknown;
-    if (
-      typeof reason === "string" &&
-      PROVIDER_FAILURE_REASONS.has(reason as ProviderTrackFailureReason)
-    ) {
-      return { ok: false, reason: reason as ProviderTrackFailureReason };
-    }
-  }
-  return { ok: false, reason: "adapter-not-loaded" };
-}
-
-function normalizeProviderNames(value: unknown): readonly ProviderName[] | undefined {
+function providerNames(value: unknown): readonly ProviderName[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const supported = new Set<ProviderName>([
-    "fathom",
-    "google-analytics",
-    "matomo",
-    "plausible",
-    "umami",
-  ]);
   const names: ProviderName[] = [];
-  for (const provider of value) {
-    if (typeof provider !== "string" || !supported.has(provider as ProviderName)) {
-      return undefined;
-    }
-    if (names.includes(provider as ProviderName)) return undefined;
-    names.push(provider as ProviderName);
+  for (const item of value) {
+    if (typeof item !== "string" || !PROVIDERS.has(item as ProviderName) || names.includes(item as ProviderName)) return undefined;
+    names.push(item as ProviderName);
   }
   return Object.freeze(names);
 }
 
-function normalizeResult(
-  value: unknown,
-  providerNames: readonly ProviderName[],
-): TrackResult {
-  if (
-    !isRecord(value) ||
-    (!hasExactKeys(value, ["ok", "providers"]) &&
-      !hasExactKeys(value, ["ok", "providers", "reason"]))
-  ) {
-    const failures: Partial<Record<ProviderName, ProviderTrackResult>> = {};
-    for (const provider of providerNames) {
-      Object.defineProperty(failures, provider, {
-        configurable: false,
-        enumerable: true,
-        value: Object.freeze({ ok: false, reason: "adapter-not-loaded" }),
-        writable: false,
-      });
-    }
-    return { ok: false, providers: Object.freeze(failures) };
+function event(name: unknown, properties: unknown): { name: string; properties?: EventProperties } | undefined {
+  if (typeof name !== "string") return undefined;
+  const normalizedName = name.trim();
+  if (!normalizedName || normalizedName.length > EVENT_NAME_MAX_LENGTH) return undefined;
+  if (properties === undefined) return { name: normalizedName };
+  const source = record(properties);
+  if (!source) return undefined;
+  const entries = Object.entries(source);
+  if (entries.length > EVENT_PROPERTY_COUNT_MAX) return undefined;
+  const copy: EventProperties = {};
+  for (const [key, value] of entries) {
+    if (!key || key.length > EVENT_PROPERTY_KEY_MAX_LENGTH ||
+        typeof value === "string" && value.length > EVENT_PROPERTY_STRING_MAX_LENGTH ||
+        typeof value === "number" && !Number.isFinite(value) ||
+        typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") return undefined;
+    copy[key] = value;
   }
-  const rawProviders = Reflect.get(value, "providers") as unknown;
-  if (!isRecord(rawProviders)) {
-    return normalizeResult(undefined, providerNames);
-  }
-  const rawKeys = Reflect.ownKeys(rawProviders);
-  if (
-    rawKeys.length !== providerNames.length ||
-    !providerNames.every((provider) => rawKeys.includes(provider))
-  ) {
-    return normalizeResult(undefined, providerNames);
-  }
+  return { name: normalizedName, properties: copy };
+}
+
+function disabled(reason: "disabled" | "invalid-event"): TrackResult {
+  return { ok: false, providers: Object.freeze({}), reason };
+}
+
+function normalizeProviderResult(value: unknown): ProviderTrackResult {
+  const result = record(value);
+  if (result?.ok === true && Object.keys(result).length === 1) return { ok: true };
+  if (result?.ok === false && typeof result.reason === "string" &&
+      REASONS.has(result.reason as ProviderTrackFailureReason) && Object.keys(result).length === 2)
+    return { ok: false, reason: result.reason as ProviderTrackFailureReason };
+  return { ok: false, reason: "adapter-not-loaded" };
+}
+
+function malformedResults(names: readonly ProviderName[]): TrackResult {
+  const providers: ProviderTrackResults = Object.freeze(Object.fromEntries(
+    names.map((name) => [name, Object.freeze({ ok: false, reason: "adapter-not-loaded" })]),
+  ));
+  return { ok: false, providers };
+}
+
+function normalizeResult(value: unknown, names: readonly ProviderName[]): TrackResult {
+  const aggregate = record(value);
+  const rawProviders = record(aggregate?.providers);
+  if (!aggregate || !rawProviders || Object.keys(rawProviders).length !== names.length ||
+      !names.every((name) => Object.hasOwn(rawProviders, name))) return malformedResults(names);
   const providers: Partial<Record<ProviderName, ProviderTrackResult>> = {};
-  let allAccepted = providerNames.length > 0;
-  let sharedReason: TrackFailureReason | undefined;
-  let failures = 0;
-  for (const provider of providerNames) {
-    const result = normalizeProviderResult(Reflect.get(rawProviders, provider));
+  let accepted = names.length > 0;
+  let sharedReason: ProviderTrackFailureReason | undefined;
+  for (const name of names) {
+    const result = normalizeProviderResult(rawProviders[name]);
+    providers[name] = Object.freeze(result);
     if (!result.ok) {
-      allAccepted = false;
-      failures += 1;
-      if (failures === 1) sharedReason = result.reason;
-      else if (sharedReason !== result.reason) sharedReason = undefined;
+      accepted = false;
+      sharedReason = sharedReason === undefined ? result.reason
+        : sharedReason === result.reason ? sharedReason : undefined;
     }
-    Object.defineProperty(providers, provider, {
-      configurable: false,
-      enumerable: true,
-      value: Object.freeze(result),
-      writable: false,
-    });
   }
-  if (Reflect.get(value, "ok") !== allAccepted) {
-    return normalizeResult(undefined, providerNames);
-  }
-  const frozenProviders = Object.freeze(providers);
-  if (allAccepted) {
-    if (Reflect.ownKeys(value).includes("reason")) {
-      return normalizeResult(undefined, providerNames);
-    }
-    return { ok: true, providers: frozenProviders };
-  }
-  const rawReason = Reflect.get(value, "reason") as unknown;
-  if (rawReason !== undefined) {
-    if (typeof rawReason !== "string" || !FAILURE_REASONS.has(rawReason as TrackFailureReason)) {
-      return normalizeResult(undefined, providerNames);
-    }
-    if (failures !== providerNames.length || sharedReason !== rawReason) {
-      return normalizeResult(undefined, providerNames);
-    }
-    return { ok: false, providers: frozenProviders, reason: rawReason as TrackFailureReason };
-  }
-  return { ok: false, providers: frozenProviders };
+  if (aggregate.ok !== accepted) return malformedResults(names);
+  const frozen = Object.freeze(providers);
+  if (accepted) return { ok: true, providers: frozen };
+  if (typeof aggregate.reason === "string" && aggregate.reason === sharedReason)
+    return { ok: false, providers: frozen, reason: sharedReason };
+  if (aggregate.reason !== undefined) return malformedResults(names);
+  return { ok: false, providers: frozen };
 }
 
 export function configuredProviders(): readonly ProviderName[] {
-  try {
-    if (typeof window === "undefined") return Object.freeze([]);
-    const client = Reflect.get(window, "astroAnalytics") as unknown;
-    if (!isObject(client)) return Object.freeze([]);
-    return normalizeProviderNames(Reflect.get(client, "providers")) ?? Object.freeze([]);
-  } catch {
-    return Object.freeze([]);
-  }
+  try { return typeof window === "undefined" ? Object.freeze([]) : providerNames(window.astroAnalytics?.providers) ?? Object.freeze([]); }
+  catch { return Object.freeze([]); }
 }
 
 export function providerStatuses(): ProviderRuntimeStatuses {
   try {
-    if (typeof window === "undefined") return Object.freeze({});
-    const client = Reflect.get(window, "astroAnalytics") as unknown;
-    if (!isObject(client)) return Object.freeze({});
-    const providerNames = normalizeProviderNames(Reflect.get(client, "providers"));
-    const status = Reflect.get(client, "status") as unknown;
-    if (!providerNames || typeof status !== "function") return Object.freeze({});
-    const value = Reflect.apply(status, client, []) as unknown;
-    if (!isRecord(value)) return Object.freeze({});
-    const keys = Reflect.ownKeys(value);
-    if (keys.length !== providerNames.length ||
-        !providerNames.every((provider) => keys.includes(provider))) {
-      return Object.freeze({});
+    const names = configuredProviders();
+    if (typeof window === "undefined" || !window.astroAnalytics || names.length === 0) return Object.freeze({});
+    const value = record(window.astroAnalytics.status());
+    if (!value || Object.keys(value).length !== names.length) return Object.freeze({});
+    const statuses: Partial<Record<ProviderName, ProviderRuntimeStatus>> = {};
+    for (const name of names) {
+      const status = value[name];
+      if (typeof status !== "string" || !STATUSES.has(status as ProviderRuntimeStatus)) return Object.freeze({});
+      statuses[name] = status as ProviderRuntimeStatus;
     }
-    const normalized: Partial<Record<ProviderName, ProviderRuntimeStatus>> = {};
-    for (const provider of providerNames) {
-      const providerStatus = Reflect.get(value, provider) as unknown;
-      if (typeof providerStatus !== "string" ||
-          !PROVIDER_RUNTIME_STATUSES.has(providerStatus as ProviderRuntimeStatus)) {
-        return Object.freeze({});
-      }
-      Object.defineProperty(normalized, provider, {
-        configurable: false,
-        enumerable: true,
-        value: providerStatus,
-        writable: false,
-      });
-    }
-    return Object.freeze(normalized);
-  } catch {
-    return Object.freeze({});
-  }
+    return Object.freeze(statuses);
+  } catch { return Object.freeze({}); }
 }
 
 export function track(name: string, properties?: EventProperties): TrackResult {
   try {
-    const event = normalizeEvent(name, properties);
-    if (!event) return emptyFailure("invalid-event");
-
-    if (typeof window === "undefined") {
-      return emptyFailure("disabled");
-    }
-    const browserGlobal: unknown = window;
-    if (!isObject(browserGlobal)) {
-      return emptyFailure("disabled");
-    }
-    const client = Reflect.get(browserGlobal, "astroAnalytics") as unknown;
-    if (client === undefined || client === null) {
-      return emptyFailure("disabled");
-    }
-    if (!isObject(client)) {
-      return emptyFailure("disabled");
-    }
-    const clientTrack = Reflect.get(client, "track") as unknown;
-    if (typeof clientTrack !== "function") {
-      return emptyFailure("disabled");
-    }
-    const providerNames = normalizeProviderNames(Reflect.get(client, "providers"));
-    if (!providerNames || providerNames.length === 0) return emptyFailure("disabled");
-    return normalizeResult(
-      Reflect.apply(clientTrack, client, [event.name, event.properties]),
-      providerNames,
-    );
-  } catch {
-    return emptyFailure("disabled");
-  }
+    const normalized = event(name, properties);
+    if (!normalized) return disabled("invalid-event");
+    if (typeof window === "undefined" || !window.astroAnalytics) return disabled("disabled");
+    const names = providerNames(window.astroAnalytics.providers);
+    if (!names?.length) return disabled("disabled");
+    return normalizeResult(window.astroAnalytics.track(normalized.name, normalized.properties), names);
+  } catch { return disabled("disabled"); }
 }

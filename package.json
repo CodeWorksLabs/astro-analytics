@@ -1,6 +1,6 @@
 {
   "name": "@codeworkslabs/astro-analytics",
-  "version": "0.1.0-alpha.19",
+  "version": "0.1.0-alpha.20",
   "description": "A strict analytics integration foundation for Astro and Starlight.",
   "private": true,
   "license": "MIT",
@@ -29,7 +29,6 @@
     "./starlight": "./src/starlight/index.ts"
   },
   "imports": {
-    "#adapter-types": "./src/adapters/types.ts",
     "#config": "./src/config.ts",
     "#core": "./src/index.ts",
     "#runtime": "./src/runtime.ts"

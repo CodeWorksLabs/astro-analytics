@@ -30,7 +30,7 @@ npm test
 
 The typecheck compiles package source, tests, and the real Astro/Starlight type
 fixture without emitting files. The test suite exercises configuration, event,
-Astro integration, Starlight wrapper, and hostile-global behavior.
+provider, lifecycle, Astro integration, and Starlight wrapper behavior.
 
 ## Inspect the package surface
 
@@ -48,8 +48,8 @@ The artifact intentionally contains Astro-native TypeScript source rather than
 compiled JavaScript. Test both Astro loading and ordinary TypeScript resolution;
 plain Node.js 22 import from `node_modules` is outside the current contract.
 
-The repository enforces LF for text files through `.gitattributes`. Exact
-candidate tarballs must be packed from a clean export of the committed tree,
+The repository enforces LF for text files through `.gitattributes`. Release
+tarballs should be packed from a clean export of the committed tree,
 not from a platform-normalized working copy, and package members must be checked
 against the corresponding Git blobs before consumer qualification.
 
@@ -68,10 +68,8 @@ dependency audit, and hosting dry-run. A dry-run is not authorization to deploy.
 branches may be used for bounded changes, but they must be merged or otherwise
 integrated deliberately and removed when their work is complete; a permanent
 Codex development branch is not part of the release model. Tags, GitHub Releases,
-npm publication, and production package integration remain separately
-controlled. Authorized sandbox and documentation-site work follows each owning
-repository's checkpoint. See the product repository checkpoint for the exact
-candidate and review state.
+npm publication, and production package integration are separate release
+activities.
 
 Version choice and artifact qualification are separate from release authority.
 See [Versioning and releases](versioning-and-releases.md).

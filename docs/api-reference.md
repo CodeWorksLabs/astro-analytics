@@ -60,11 +60,6 @@ The entry point exports the configuration types documented in the
 - `NormalizedAnalyticsProvider` and `NormalizedAstroAnalyticsConfig`
 - `PageviewMode`
 
-It also exports `AnalyticsAdapter`, `AnalyticsEvent`, and `AdapterRuntimePlan`.
-These remain forward-looking adapter-development contracts. Provider
-runtimes are selected internally and are not exported as public
-adapter objects.
-
 Provider runtime factories are internal; sites configure them through their
 exported provider types.
 

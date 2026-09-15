@@ -24,10 +24,10 @@ const result = track("checkout", {
 ```
 
 `track()` is synchronous and does not throw for malformed browser globals,
-clients, adapter results, or supported hostile-object cases. It validates and
+clients, or adapter results. It validates and
 copies the event before invoking `window.astroAnalytics.track()`.
 
-Milestone 2 connects the client to Fathom's `trackEvent()`, Plausible's
+The current package connects the client to Fathom's `trackEvent()`, Plausible's
 `plausible()`, Google Analytics 4's `gtag()`, Matomo's `_paq`, and Umami's
 `umami.track()` APIs. Calls made before an integration's script load is verified return `adapter-not-loaded`; they are not
 queued or retried. Unrelated preexisting vendor globals are not treated as
@@ -99,17 +99,16 @@ and the Fathom API is ready. Consequently, a negative or fractional `_value`
 returns `consent-pending` while consent is pending, `adapter-not-loaded` before
 Fathom loads, and `invalid-event` once `fathom.trackEvent()` is callable.
 
-Adapter and aggregate results must have their exact declared shapes. Unexpected
-values are converted to per-provider `adapter-not-loaded` failures rather than
-escaping the public result union or hiding another provider's success.
+Unexpected adapter results are converted to per-provider `adapter-not-loaded`
+failures rather than escaping the public result union or hiding another
+provider's success.
 
 ## Browser global
 
 When configuration, environment policy, and `events: true` all permit injection,
 the bootstrap defines a frozen `window.astroAnalytics` client with a frozen,
-ordered `providers` list. Its public brand is descriptive metadata, not proof of
-origin. The coordinator-private runtime protocol preserves its client across
-matching page bootstraps and replaces safely replaceable unrelated values.
+ordered `providers` list. The coordinator preserves its client across matching
+page bootstraps and leaves unrelated occupied globals unchanged.
 Provider adapters register independently, so one adapter cannot overwrite or
 suppress another by integration order. Direct calls to this declared public
 client receive the same event name and property validation as the imported
@@ -148,4 +147,5 @@ only, even though Umami itself can accept arrays and nested objects. An accepted
 synchronous call produces Umami's independent `{ ok: true }` result; it does not
 prove server delivery.
 
-Do not depend on the brand or property descriptor as a security boundary.
+The browser client and its metadata are not a security boundary against other
+same-origin JavaScript.
