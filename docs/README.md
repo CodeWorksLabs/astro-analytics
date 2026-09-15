@@ -1,6 +1,6 @@
 # Analytics for Astro documentation
 
-These documents describe the npm-unpublished `0.1.0-alpha.20` source of
+These documents describe the npm-unpublished `0.1.0-alpha.21` source of
 `@codeworkslabs/astro-analytics`.
 
 The package provides Fathom, Plausible, Google Analytics 4, Matomo, and Umami

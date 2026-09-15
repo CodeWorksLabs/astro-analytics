@@ -1,6 +1,6 @@
 {
   "name": "@codeworkslabs/astro-analytics",
-  "version": "0.1.0-alpha.20",
+  "version": "0.1.0-alpha.21",
   "description": "A strict analytics integration foundation for Astro and Starlight.",
   "private": true,
   "license": "MIT",

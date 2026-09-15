@@ -54,9 +54,10 @@ shared browser client; pageview-only configurations return an empty status map.
 | Number value | Must be finite |
 | Other values | Booleans are accepted; objects, arrays, `null`, symbols, and functions are rejected |
 
-Property bags must be ordinary or null-prototype records. Symbol-keyed property
-bags and branded objects such as `Map`, `Date`, `Set`, boxed primitives, and
-regular expressions are rejected.
+Property bags must be ordinary or null-prototype records containing only
+enumerable string-keyed data properties. Symbol-keyed, non-enumerable, and
+accessor properties are rejected, as are branded objects such as `Map`, `Date`,
+`Set`, boxed primitives, and regular expressions.
 
 ## Results
 

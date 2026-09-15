@@ -50,6 +50,51 @@ test("event names and property bounds are enforced before dispatch", () => {
   clearClient();
 });
 
+test("property bags require enumerable string-keyed plain records", () => {
+  let calls = 0;
+  setClient({
+    providers: ["fathom"],
+    track: () => {
+      calls += 1;
+      return { ok: true, providers: { fathom: { ok: true } } };
+    },
+  });
+  const symbolBag = { [Symbol("hidden")]: "value" };
+  const nonEnumerableBag = {};
+  Object.defineProperty(nonEnumerableBag, "hidden", { enumerable: false, value: "value" });
+  const accessorBag = {};
+  Object.defineProperty(accessorBag, "value", { enumerable: true, get: () => "value" });
+  const fakeObjectPrototype = Object.create(null);
+  Object.defineProperty(fakeObjectPrototype, "constructor", {
+    configurable: true,
+    value: function Object() {},
+    writable: true,
+  });
+  const customPrototypeBag = Object.assign(Object.create(fakeObjectPrototype), { plan: "pro" });
+  for (const properties of [
+    new Date(),
+    new Map(),
+    new Set(),
+    /value/,
+    Object("value"),
+    [],
+    null,
+    symbolBag,
+    nonEnumerableBag,
+    accessorBag,
+    customPrototypeBag,
+  ]) {
+    const result = track("event", properties as never);
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.reason, "invalid-event");
+  }
+  const nullPrototype = Object.assign(Object.create(null), { plan: "pro" });
+  assert.equal(track("event", nullPrototype).ok, true);
+  assert.equal(track("event", { plan: "pro", value: 2, member: true }).ok, true);
+  assert.equal(calls, 2);
+  clearClient();
+});
+
 test("valid events normalize names and expose every provider result", () => {
   let received: unknown[] = [];
   setClient({

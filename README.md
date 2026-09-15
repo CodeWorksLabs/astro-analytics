@@ -2,7 +2,7 @@
 
 `@codeworkslabs/astro-analytics` is an experimental Astro integration for
 Fathom, Plausible, Google Analytics 4, Matomo, and Umami. The current source is
-`0.1.0-alpha.20` and is not published to npm.
+`0.1.0-alpha.21` and is not published to npm.
 
 It supports multiple providers at once, Astro and ClientRouter pageview
 lifecycle handling, bounded custom events, per-provider status/results, an

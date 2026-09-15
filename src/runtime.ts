@@ -1,3 +1,10 @@
+import {
+  EVENT_PROPERTY_LIMITS,
+  validateEventProperties,
+  type EventPropertyLimits,
+  type EventPropertyValidation,
+} from "./event-validation.ts";
+
 export const RUNTIME_CLIENT_BRAND = "astro-analytics:client:v1";
 export const FATHOM_SCRIPT_ID = "codeworkslabs-astro-analytics-fathom";
 export const PLAUSIBLE_SCRIPT_ID = "codeworkslabs-astro-analytics-plausible";
@@ -64,7 +71,12 @@ function serialize(value: unknown): string {
 }
 
 // Serialized into the page; keep this function self-contained.
-function browserClientRuntime(config: any, brand: string): void {
+function browserClientRuntime(
+  config: any,
+  brand: string,
+  validateProperties: (value: unknown, limits: EventPropertyLimits) => EventPropertyValidation,
+  propertyLimits: EventPropertyLimits,
+): void {
   try {
     const root = globalThis as any;
     const key = Symbol.for("codeworkslabs.astro-analytics:client-coordinator:v3");
@@ -82,20 +94,11 @@ function browserClientRuntime(config: any, brand: string): void {
       if (typeof name !== "string") return undefined;
       const eventName = name.trim();
       if (!eventName || eventName.length > 128) return undefined;
-      if (properties === undefined) return { name: eventName, properties: undefined };
-      if (!properties || typeof properties !== "object" || Array.isArray(properties))
-        return undefined;
-      const entries = Object.entries(properties);
-      if (entries.length > 100) return undefined;
-      const copy: Record<string, string | number | boolean> = {};
-      for (const [key, value] of entries) {
-        if (!key || key.length > 128 ||
-            typeof value === "string" && value.length > 1024 ||
-            typeof value === "number" && !Number.isFinite(value) ||
-            typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") return undefined;
-        copy[key] = value as string | number | boolean;
-      }
-      return { name: eventName, properties: copy };
+      const validation = validateProperties(properties, propertyLimits);
+      if (!validation.ok) return undefined;
+      return validation.properties === undefined
+        ? { name: eventName, properties: undefined }
+        : { name: eventName, properties: validation.properties };
     };
     const client = Object.freeze({
       __astroAnalyticsBrand: brand,
@@ -488,7 +491,7 @@ function providerScript(options: unknown, factory: () => BrowserAdapter): string
 }
 
 export function createBootstrapScript(options: AnalyticsRuntimeOptions = { events: true, providers: ["fathom"], runtimeToken: "test-runtime-token" }): string {
-  return `(${browserClientRuntime.toString()})(${serialize(options)},${JSON.stringify(RUNTIME_CLIENT_BRAND)});`;
+  return `(${browserClientRuntime.toString()})(${serialize(options)},${JSON.stringify(RUNTIME_CLIENT_BRAND)},(${validateEventProperties.toString()}),${serialize(EVENT_PROPERTY_LIMITS)});`;
 }
 
 export const createFathomBootstrapScript = (options: FathomRuntimeOptions): string => providerScript(options, fathomAdapter);

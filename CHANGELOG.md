@@ -5,6 +5,13 @@ package is not currently published to npm.
 
 ## Unreleased
 
+## 0.1.0-alpha.21
+
+- Enforce one exact event-property record boundary for both the imported client
+  helper and direct browser client. Symbol-keyed, non-enumerable, accessor, and
+  branded property bags now fail closed instead of being accepted or silently
+  reduced.
+
 ## 0.1.0-alpha.20
 
 - Remove the unused `AnalyticsAdapter`, `AnalyticsEvent`, and

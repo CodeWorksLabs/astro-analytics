@@ -1,9 +1,13 @@
 import type { AnalyticsProvider } from "#config";
+import {
+  EVENT_PROPERTY_LIMITS,
+  validateEventProperties,
+} from "./event-validation.ts";
 
 export const EVENT_NAME_MAX_LENGTH = 128;
-export const EVENT_PROPERTY_COUNT_MAX = 100;
-export const EVENT_PROPERTY_KEY_MAX_LENGTH = 128;
-export const EVENT_PROPERTY_STRING_MAX_LENGTH = 1024;
+export const EVENT_PROPERTY_COUNT_MAX = EVENT_PROPERTY_LIMITS.count;
+export const EVENT_PROPERTY_KEY_MAX_LENGTH = EVENT_PROPERTY_LIMITS.keyLength;
+export const EVENT_PROPERTY_STRING_MAX_LENGTH = EVENT_PROPERTY_LIMITS.stringLength;
 
 export type TrackFailureReason = "disabled" | "adapter-not-loaded" | "consent-pending" | "invalid-event";
 export type ProviderName = AnalyticsProvider["name"];
@@ -53,20 +57,11 @@ function event(name: unknown, properties: unknown): { name: string; properties?:
   if (typeof name !== "string") return undefined;
   const normalizedName = name.trim();
   if (!normalizedName || normalizedName.length > EVENT_NAME_MAX_LENGTH) return undefined;
-  if (properties === undefined) return { name: normalizedName };
-  const source = record(properties);
-  if (!source) return undefined;
-  const entries = Object.entries(source);
-  if (entries.length > EVENT_PROPERTY_COUNT_MAX) return undefined;
-  const copy: EventProperties = {};
-  for (const [key, value] of entries) {
-    if (!key || key.length > EVENT_PROPERTY_KEY_MAX_LENGTH ||
-        typeof value === "string" && value.length > EVENT_PROPERTY_STRING_MAX_LENGTH ||
-        typeof value === "number" && !Number.isFinite(value) ||
-        typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") return undefined;
-    copy[key] = value;
-  }
-  return { name: normalizedName, properties: copy };
+  const validation = validateEventProperties(properties, EVENT_PROPERTY_LIMITS);
+  if (!validation.ok) return undefined;
+  return validation.properties === undefined
+    ? { name: normalizedName }
+    : { name: normalizedName, properties: validation.properties };
 }
 
 function disabled(reason: "disabled" | "invalid-event"): TrackResult {

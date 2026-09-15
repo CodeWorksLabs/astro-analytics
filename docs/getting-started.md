@@ -1,6 +1,6 @@
 # Getting started
 
-Analytics for Astro is currently `0.1.0-alpha.20` and is not published to npm.
+Analytics for Astro is currently `0.1.0-alpha.21` and is not published to npm.
 Use an authorized local package artifact or workspace dependency.
 
 ## Requirements

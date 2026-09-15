@@ -7,7 +7,7 @@ bounded peer dependencies.
 
 ## Current version
 
-The repository currently identifies `0.1.0-alpha.20`. It is an unpublished
+The repository currently identifies `0.1.0-alpha.21`. It is an unpublished
 development version with breaking contract cleanup:
 
 - `providers` is the sole provider configuration input;

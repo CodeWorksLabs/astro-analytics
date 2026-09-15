@@ -241,6 +241,39 @@ test("multi-provider client keeps independent outcomes", () => {
   assert.equal("reason" in result, false);
 });
 
+test("direct browser events enforce the same property-record boundary", () => {
+  const h = harness();
+  const received: unknown[] = [];
+  run(createBootstrapScript({ events: true, providers: ["fathom"], runtimeToken: "token" }), h.context);
+  run(createFathomBootstrapScript({ events: true, pageviews: "none", runtimeToken: "token", scriptSrc: "https://cdn.usefathom.com/script.js", siteId: "ABCDEFG" }), h.context);
+  h.context.fathom = { trackEvent(...args: unknown[]) { received.push(args); } };
+  h.appended[0]!.dispatch("load");
+
+  const invalid = [new Date(), new Map(), new Set(), /value/, Object("value"), [], null];
+  for (const properties of invalid) {
+    assert.equal(h.context.astroAnalytics.track("event", properties).reason, "invalid-event");
+  }
+  const symbolBag = { [Symbol("hidden")]: "value" };
+  const nonEnumerableBag = {};
+  Object.defineProperty(nonEnumerableBag, "hidden", { enumerable: false, value: "value" });
+  const accessorBag = {};
+  Object.defineProperty(accessorBag, "value", { enumerable: true, get: () => "value" });
+  const fakeObjectPrototype = Object.create(null);
+  Object.defineProperty(fakeObjectPrototype, "constructor", {
+    configurable: true,
+    value: function Object() {},
+    writable: true,
+  });
+  const customPrototypeBag = Object.assign(Object.create(fakeObjectPrototype), { plan: "pro" });
+  for (const properties of [symbolBag, nonEnumerableBag, accessorBag, customPrototypeBag]) {
+    assert.equal(h.context.astroAnalytics.track("event", properties).reason, "invalid-event");
+  }
+  const nullPrototype = Object.assign(Object.create(null), { plan: "pro" });
+  assert.equal(h.context.astroAnalytics.track("event", nullPrototype).ok, true);
+  assert.equal(h.context.astroAnalytics.track("event", { plan: "pro" }).ok, true);
+  assert.equal(received.length, 2);
+});
+
 test("script errors clean owned state and permit a clean retry", () => {
   const h = harness();
   const options = { events: false, pageviews: "provider" as const, runtimeToken: "token", scriptSrc: "https://cdn.usefathom.com/script.js", siteId: "ABCDEFG" };
